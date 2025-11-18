@@ -1,0 +1,126 @@
+"""Real-time BdSL recognition demo using webcam input."""
+from __future__ import annotations
+
+import argparse
+import collections
+import time
+from pathlib import Path
+
+import cv2
+import mediapipe as mp
+import numpy as np
+import torch
+
+from demo.ui_helpers import draw_landmarks, overlay_text
+from models.classifier import MultiTaskHead
+from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
+from models.fusion import FusionMLP
+from preprocess.normalize import NormalizationConfig, normalize_sample, pad_or_crop
+
+
+class FusionModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.hand_encoder = HandEncoder()
+        self.face_encoder = FaceEncoder()
+        self.pose_encoder = PoseEncoder()
+        fusion_dim = self.hand_encoder.config.model_dim + self.face_encoder.config.model_dim + self.pose_encoder.config.model_dim
+        self.fusion = FusionMLP(input_dim=fusion_dim)
+        self.head = MultiTaskHead(128)
+
+    def forward(self, sample):
+        hand = torch.cat((sample["hand_left"], sample["hand_right"]), dim=-1)
+        hand_feat = self.hand_encoder(hand.view(hand.size(0), hand.size(1), -1))
+        face_feat = self.face_encoder(sample["face"].view(sample["face"].size(0), sample["face"].size(1), -1))
+        pose_feat = self.pose_encoder(sample["pose"].view(sample["pose"].size(0), sample["pose"].size(1), -1))
+        fused = torch.cat([hand_feat, face_feat, pose_feat], dim=1)
+        fused = self.fusion(fused)
+        return self.head(fused)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run real-time BdSL demo.")
+    parser.add_argument("checkpoint", type=Path, help="Path to trained fusion model weights.")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--buffer", type=int, default=48)
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    device = torch.device(args.device)
+    model = FusionModel().to(device)
+    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    model.eval()
+
+    holistic = mp.solutions.holistic.Holistic()
+    cap = cv2.VideoCapture(0)
+    buffer = collections.deque(maxlen=args.buffer)
+    config = NormalizationConfig(sequence_length=args.buffer)
+    ema_sign = None
+    ema_grammar = None
+    alpha = 0.6
+
+    while True:
+        start = time.time()
+        ret, frame = cap.read()
+        if not ret:
+            break
+        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = holistic.process(image_rgb)
+        sample = {
+            "hand_left": _landmark_array(result.left_hand_landmarks, 21),
+            "hand_right": _landmark_array(result.right_hand_landmarks, 21),
+            "face": _landmark_array(result.face_landmarks, 468),
+            "pose": _landmark_array(result.pose_landmarks, 33),
+        }
+        buffer.append(sample)
+
+        if len(buffer) == buffer.maxlen:
+            stacked = _stack_buffer(buffer)
+            normalized = normalize_sample(stacked, config)
+            tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
+            with torch.no_grad():
+                sign_logits, grammar_logits = model(tensor_sample)
+            sign_prob = torch.softmax(sign_logits, dim=1)
+            grammar_prob = torch.softmax(grammar_logits, dim=1)
+            ema_sign = sign_prob if ema_sign is None else alpha * sign_prob + (1 - alpha) * ema_sign
+            ema_grammar = (
+                grammar_prob if ema_grammar is None else alpha * grammar_prob + (1 - alpha) * ema_grammar
+            )
+            sign_pred = int(torch.argmax(ema_sign))
+            grammar_pred = int(torch.argmax(ema_grammar))
+        else:
+            sign_pred = grammar_pred = -1
+
+        overlay = overlay_text(
+            frame.copy(),
+            sign=f"#{sign_pred}" if sign_pred >= 0 else "...",
+            grammar=f"#{grammar_pred}" if grammar_pred >= 0 else "...",
+            fps=1.0 / (time.time() - start),
+        )
+        cv2.imshow("BdSL Demo", overlay)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+
+    cap.release()
+    holistic.close()
+    cv2.destroyAllWindows()
+
+
+def _landmark_array(landmarks, size: int) -> np.ndarray:
+    if landmarks is None:
+        return np.zeros((size, 3), dtype=np.float32)
+    return np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark], dtype=np.float32)
+
+
+def _stack_buffer(buffer):
+    stacked = {key: [] for key in buffer[0].keys()}
+    for sample in buffer:
+        for key, value in sample.items():
+            stacked[key].append(value)
+    return {k: pad_or_crop(np.stack(v), len(buffer)) for k, v in stacked.items()}
+
+
+if __name__ == "__main__":
+    main()
