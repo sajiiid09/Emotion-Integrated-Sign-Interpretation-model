@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from models.fusion import FusionModel
-from train.dataset import BdSLDataset
+from train.dataset import BdSLDataset, SignerSplits
 
 
 def parse_args():
@@ -18,13 +18,16 @@ def parse_args():
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--val-signers", nargs="+", required=True)
+    parser.add_argument("--test-signers", nargs="+", required=True)
     return parser.parse_args()
 
 
 def evaluate_model():
     args = parse_args()
     device = torch.device(args.device)
-    test_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="test")
+    signer_splits = SignerSplits(args.train_signers, args.val_signers, args.test_signers)
+    test_dataset = BdSLDataset(args.manifest, args.landmarks, signer_splits, split="test")
     loader = DataLoader(test_dataset, batch_size=64)
     model = FusionModel().to(device)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))

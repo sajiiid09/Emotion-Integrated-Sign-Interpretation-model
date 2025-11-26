@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import torch
 
+from models.constants import FACE_IN_DIM, HAND_IN_DIM, POSE_IN_DIM
 from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
 
 MODALITY_TENSORS = {
@@ -12,7 +13,7 @@ MODALITY_TENSORS = {
 }
 
 MODALITY_ENCODERS = {
-    "hands": lambda: HandEncoder(input_dim=21 * 3 * 2),
-    "face": lambda: FaceEncoder(input_dim=468 * 3),
-    "pose": lambda: PoseEncoder(input_dim=33 * 3),
+    "hands": lambda: HandEncoder(input_dim=HAND_IN_DIM),
+    "face": lambda: FaceEncoder(input_dim=FACE_IN_DIM),
+    "pose": lambda: PoseEncoder(input_dim=POSE_IN_DIM),
 }

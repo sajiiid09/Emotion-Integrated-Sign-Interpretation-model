@@ -99,6 +99,8 @@ def _process_video_file(
     output_dir: Path,
     config: NormalizationConfig,
 ) -> Optional[Path]:
+    # Disable OpenCV threading in each worker to avoid oversubscription when using multiprocessing.
+    cv2.setNumThreads(0)
     try:
         sample = extract_video(video_path, seq_len, max_frames)
         normalized = normalize_sample(sample, config)

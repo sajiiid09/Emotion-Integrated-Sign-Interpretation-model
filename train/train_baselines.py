@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from models.classifier import MultiTaskHead
 from models.config import MODALITY_ENCODERS, MODALITY_TENSORS
-from train.dataset import BdSLDataset
+from train.dataset import BdSLDataset, SignerSplits
 
 
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +66,8 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--val-signers", nargs="+", required=True)
+    parser.add_argument("--test-signers", nargs="+", required=True)
     parser.add_argument("--num-workers", type=int, default=4, help="DataLoader worker count.")
     parser.add_argument(
         "--no-pin-memory",
@@ -79,8 +81,9 @@ def parse_args():
 def main():
     args = parse_args()
     device = torch.device(args.device)
-    train_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="train")
-    val_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="val")
+    signer_splits = SignerSplits(args.train_signers, args.val_signers, args.test_signers)
+    train_dataset = BdSLDataset(args.manifest, args.landmarks, signer_splits, split="train")
+    val_dataset = BdSLDataset(args.manifest, args.landmarks, signer_splits, split="val")
     loader_train = DataLoader(
         train_dataset,
         batch_size=args.batch_size,

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import collections
 import time
 from pathlib import Path
 
@@ -13,7 +12,8 @@ import torch
 
 from demo.ui_helpers import draw_landmarks, overlay_text
 from models.fusion import FusionModel
-from preprocess.normalize import NormalizationConfig, normalize_sample, pad_or_crop
+from models.constants import FACE_POINTS, HAND_POINTS, POSE_POINTS
+from preprocess.normalize import NormalizationConfig, normalize_sample
 
 
 def parse_args():
@@ -33,7 +33,9 @@ def main():
 
     holistic = mp.solutions.holistic.Holistic()
     cap = cv2.VideoCapture(0)
-    buffer = collections.deque(maxlen=args.buffer)
+    buffers = _init_buffers(args.buffer)
+    write_idx = 0
+    filled = 0
     config = NormalizationConfig(sequence_length=args.buffer)
     ema_sign = None
     ema_grammar = None
@@ -52,11 +54,12 @@ def main():
             "face": _landmark_array(result.face_landmarks, 468),
             "pose": _landmark_array(result.pose_landmarks, 33),
         }
-        buffer.append(sample)
+        write_idx = _write_sample(buffers, sample, write_idx)
+        filled = min(filled + 1, args.buffer)
 
-        if len(buffer) == buffer.maxlen:
-            stacked = _stack_buffer(buffer)
-            normalized = normalize_sample(stacked, config)
+        if filled == args.buffer:
+            ordered = _ordered_window(buffers, write_idx)
+            normalized = normalize_sample(ordered, config)
             tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
             with torch.no_grad():
                 sign_logits, grammar_logits = model(tensor_sample)
@@ -92,12 +95,29 @@ def _landmark_array(landmarks, size: int) -> np.ndarray:
     return np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark], dtype=np.float32)
 
 
-def _stack_buffer(buffer):
-    stacked = {key: [] for key in buffer[0].keys()}
-    for sample in buffer:
-        for key, value in sample.items():
-            stacked[key].append(value)
-    return {k: pad_or_crop(np.stack(v), len(buffer)) for k, v in stacked.items()}
+def _init_buffers(size: int) -> dict[str, np.ndarray]:
+    return {
+        "hand_left": np.zeros((size, HAND_POINTS, 3), dtype=np.float32),
+        "hand_right": np.zeros((size, HAND_POINTS, 3), dtype=np.float32),
+        "face": np.zeros((size, FACE_POINTS, 3), dtype=np.float32),
+        "pose": np.zeros((size, POSE_POINTS, 3), dtype=np.float32),
+    }
+
+
+def _write_sample(buffers: dict[str, np.ndarray], sample: dict[str, np.ndarray], write_idx: int) -> int:
+    for key, array in buffers.items():
+        array[write_idx] = sample[key]
+    return (write_idx + 1) % buffers["face"].shape[0]
+
+
+def _ordered_window(buffers: dict[str, np.ndarray], write_idx: int) -> dict[str, np.ndarray]:
+    window = {}
+    for key, array in buffers.items():
+        if write_idx == 0:
+            window[key] = array
+        else:
+            window[key] = np.concatenate((array[write_idx:], array[:write_idx]), axis=0)
+    return window
 
 
 if __name__ == "__main__":
