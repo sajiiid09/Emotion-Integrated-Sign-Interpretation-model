@@ -31,7 +31,7 @@ project/
    python capture/record_videos.py data/raw <word> S01 1 1 --metadata data/manifest.csv --grammar neutral
    ```
    - Resolution: 1080p @ 30 FPS
-   - Filename format: `<word>__S<id>__sess<id>__rep<id>.mp4`
+   - Filename format: `<word>__S<id>__sess<id>__rep<id>__<grammar>.mp4` (grammar in {neutral, question, negation})
 
 2. **Build or update manifest** (if recording without `--metadata`):
    ```bash
@@ -47,11 +47,11 @@ project/
 ## Training
 1. **Baseline (single-modality) models**
    ```bash
-   python train/train_baselines.py data/manifest.csv data/landmarks hands --train-signers S01 S02 S03
+   python train/train_baselines.py data/manifest.csv data/landmarks hands --train-signers S01 S02 S03 --val-signers S04 --test-signers S05
    ```
 2. **Full fusion model**
    ```bash
-   python train/train_fusion.py data/manifest.csv data/landmarks --train-signers S01 S02 S03 --epochs 40 --batch-size 96
+   python train/train_fusion.py data/manifest.csv data/landmarks --train-signers S01 S02 S03 --val-signers S04 --test-signers S05 --epochs 40 --batch-size 96
    ```
    - Loss: `CE(sign) + 0.5 * CE(grammar)`
    - Optimizer: AdamW (lr=3e-4) + cosine scheduler
@@ -59,15 +59,15 @@ project/
 ## Evaluation & Analysis
 1. **Quantitative evaluation**
    ```bash
-   python eval/evaluate.py data/manifest.csv data/landmarks fusion_model.pt --train-signers S01 S02 S03
+   python eval/evaluate.py data/manifest.csv data/landmarks fusion_model.pt --train-signers S01 S02 S03 --val-signers S04 --test-signers S05
    ```
 2. **Confusion matrices**
    ```bash
-   python eval/confusion_matrix.py data/manifest.csv data/landmarks fusion_model.pt --train-signers S01 S02 S03 --output cm.png
+   python eval/confusion_matrix.py data/manifest.csv data/landmarks fusion_model.pt --train-signers S01 S02 S03 --val-signers S04 --test-signers S05 --output cm.png
    ```
 3. **Ablation studies**
    ```bash
-   python eval/ablations.py data/manifest.csv data/landmarks --train-signers S01 S02 S03
+   python eval/ablations.py data/manifest.csv data/landmarks --train-signers S01 S02 S03 --val-signers S04 --test-signers S05
    ```
 
 ## Real-Time Demo
@@ -81,6 +81,6 @@ python demo/realtime_demo.py fusion_model.pt --device cpu --buffer 48
 - Displays FPS, sign class, and grammar label overlays
 
 ## Notes
-- `data/manifest.csv` defines signer-independent train/val/test splits through `--train-signers` arguments.
+- `data/manifest.csv` defines signer-independent train/val/test splits through explicit signer lists.
 - Add augmentation, checkpointing, and logger integrations as needed.
 - Ensure MediaPipe has webcam permissions on your platform.

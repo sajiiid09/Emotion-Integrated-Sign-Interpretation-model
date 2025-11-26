@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Sequence
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
+from train.vocab import Vocabulary, build_vocab_from_manifest
 
 
 @dataclass
@@ -18,6 +20,31 @@ class SampleMetadata:
     grammar: str
 
 
+@dataclass(frozen=True)
+class SignerSplits:
+    """Explicit signer partitioning for train/val/test."""
+
+    train: Sequence[str]
+    val: Sequence[str]
+    test: Sequence[str]
+
+    def __post_init__(self) -> None:
+        train_set = set(self.train)
+        val_set = set(self.val)
+        test_set = set(self.test)
+        if (train_set & val_set) or (train_set & test_set) or (val_set & test_set):
+            raise ValueError("Signer splits must be disjoint across train/val/test.")
+
+    def for_split(self, split: str) -> set[str]:
+        if split == "train":
+            return set(self.train)
+        if split == "val":
+            return set(self.val)
+        if split == "test":
+            return set(self.test)
+        raise ValueError(f"Unknown split '{split}'")
+
+
 class BdSLDataset(Dataset):
     """Dataset that loads normalized landmark npz files."""
 
@@ -25,27 +52,29 @@ class BdSLDataset(Dataset):
         self,
         manifest_path: Path,
         landmarks_dir: Path,
-        split_signers: List[str],
+        signer_splits: SignerSplits,
         split: str,
         transform: Callable[[Dict[str, np.ndarray]], Dict[str, np.ndarray]] | None = None,
+        vocab: Vocabulary | None = None,
     ) -> None:
         self.manifest_path = manifest_path
         self.landmarks_dir = landmarks_dir
-        self.split_signers = set(split_signers)
+        self.signer_splits = signer_splits
         self.split = split
         self.transform = transform
         self.samples = self._load_manifest()
-        self.label_to_idx = {word: idx for idx, word in enumerate(sorted({s.word for s in self.samples}))}
+        self.vocab = vocab if vocab is not None else build_vocab_from_manifest(self.manifest_path)
+        self.label_to_idx = self.vocab.label_to_idx
         self.grammar_to_idx = {"neutral": 0, "question": 1, "negation": 2}
 
     def _load_manifest(self) -> List[SampleMetadata]:
         rows: List[SampleMetadata] = []
+        allowed_signers = self.signer_splits.for_split(self.split)
         with self.manifest_path.open("r", encoding="utf-8") as f:
             header = next(f)
             for line in f:
                 filepath, word, signer_id, session, rep, grammar, *_ = line.strip().split(",")
-                in_train = signer_id in self.split_signers
-                if (self.split == "train" and in_train) or (self.split != "train" and not in_train):
+                if signer_id in allowed_signers:
                     rows.append(
                         SampleMetadata(
                             filepath=Path(filepath),
