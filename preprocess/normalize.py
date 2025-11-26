@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
+from mediapipe.solutions.holistic import PoseLandmark
 from sklearn.decomposition import PCA
 
 
@@ -15,9 +16,11 @@ LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-NECK_POSE_INDEX = 11  # MediaPipe pose landmark for left shoulder? we use neck derived from shoulders
-RIGHT_SHOULDER = 12
-LEFT_SHOULDER = 11
+# MediaPipe pose landmark indices for reference points
+LEFT_SHOULDER = PoseLandmark.LEFT_SHOULDER.value
+RIGHT_SHOULDER = PoseLandmark.RIGHT_SHOULDER.value
+NECK_POSE_INDEX = LEFT_SHOULDER  # retained for backward compatibility in comments
+MIN_SCALE = 0.1
 
 
 @dataclass
@@ -62,13 +65,23 @@ class FacePCAReducer:
 
 
 def center_and_scale(landmarks: np.ndarray) -> Tuple[np.ndarray, float]:
-    """Center landmarks around the neck (average shoulder) and scale by shoulder width."""
+    """Center landmarks around the neck (average shoulder) and scale by shoulder width.
+
+    A minimum scale is enforced to avoid exploding coordinates when shoulders are
+    missing or extremely close together. Existing datasets should be regenerated
+    to reflect the new normalization safeguards.
+    """
     left = landmarks[:, LEFT_SHOULDER, :3]
     right = landmarks[:, RIGHT_SHOULDER, :3]
     neck = (left + right) / 2.0
     centered = landmarks - neck[:, None, :]
     shoulder_width = np.linalg.norm(left - right, axis=-1)
-    scale = np.maximum(shoulder_width.mean(), 1e-6)
+    valid = np.isfinite(shoulder_width) & (shoulder_width > 0)
+    if not np.any(valid):
+        LOGGER.warning("Invalid shoulder widths detected; falling back to minimum scale %s", MIN_SCALE)
+        scale = MIN_SCALE
+    else:
+        scale = max(float(shoulder_width[valid].mean()), MIN_SCALE)
     normalized = centered / scale
     return normalized, scale
 

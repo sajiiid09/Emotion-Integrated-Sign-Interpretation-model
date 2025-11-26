@@ -7,30 +7,8 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from models.classifier import MultiTaskHead
-from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
-from models.fusion import FusionMLP
+from models.fusion import FusionModel
 from train.dataset import BdSLDataset
-
-
-class FusionModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.hand_encoder = HandEncoder()
-        self.face_encoder = FaceEncoder()
-        self.pose_encoder = PoseEncoder()
-        fusion_dim = self.hand_encoder.config.model_dim + self.face_encoder.config.model_dim + self.pose_encoder.config.model_dim
-        self.fusion = FusionMLP(input_dim=fusion_dim)
-        self.head = MultiTaskHead(128)
-
-    def forward(self, batch):
-        hand = torch.cat((batch["hand_left"], batch["hand_right"]), dim=-1)
-        hand_feat = self.hand_encoder(hand.view(hand.size(0), hand.size(1), -1))
-        face_feat = self.face_encoder(batch["face"].view(batch["face"].size(0), batch["face"].size(1), -1))
-        pose_feat = self.pose_encoder(batch["pose"].view(batch["pose"].size(0), batch["pose"].size(1), -1))
-        fused = torch.cat([hand_feat, face_feat, pose_feat], dim=1)
-        fused = self.fusion(fused)
-        return self.head(fused)
 
 
 def parse_args():
