@@ -10,25 +10,12 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from models.classifier import MultiTaskHead
-from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
+from models.config import MODALITY_ENCODERS, MODALITY_TENSORS
 from train.dataset import BdSLDataset
 
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("train_baselines")
-
-
-MODALITY_TENSORS = {
-    "hands": lambda batch: torch.cat((batch["hand_left"], batch["hand_right"]), dim=-1),
-    "face": lambda batch: batch["face"],
-    "pose": lambda batch: batch["pose"],
-}
-
-MODALITY_ENCODERS = {
-    "hands": lambda: HandEncoder(input_dim=21 * 3 * 2),
-    "face": lambda: FaceEncoder(input_dim=468 * 3),
-    "pose": lambda: PoseEncoder(input_dim=33 * 3),
-}
 
 
 class SingleStreamModel(nn.Module):
@@ -79,6 +66,13 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--num-workers", type=int, default=4, help="DataLoader worker count.")
+    parser.add_argument(
+        "--no-pin-memory",
+        action="store_false",
+        dest="pin_memory",
+        help="Disable DataLoader pin_memory (enabled by default for GPU training).",
+    )
     return parser.parse_args()
 
 
@@ -87,8 +81,19 @@ def main():
     device = torch.device(args.device)
     train_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="train")
     val_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="val")
-    loader_train = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    loader_val = DataLoader(val_dataset, batch_size=args.batch_size)
+    loader_train = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory and device.type == "cuda",
+    )
+    loader_val = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory and device.type == "cuda",
+    )
 
     encoder = MODALITY_ENCODERS[args.modality]()
     model = SingleStreamModel(encoder).to(device)

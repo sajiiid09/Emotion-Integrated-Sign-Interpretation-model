@@ -6,7 +6,11 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from models.utils import TemporalConvBlock, TemporalTransformerBlock
+from models.utils import (
+    TemporalConvBlock,
+    TemporalTransformerBlock,
+    sinusoidal_position_encoding,
+)
 
 
 @dataclass
@@ -34,6 +38,12 @@ class BaseEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
+        if any(isinstance(block, TemporalTransformerBlock) for block in self.blocks):
+            # Add positional encodings so transformer blocks can model temporal order.
+            # NOTE: Models need to be retrained after this change to keep performance expectations.
+            seq_len = x.size(1)
+            pos_emb = sinusoidal_position_encoding(seq_len, self.config.model_dim, device=x.device)
+            x = x + pos_emb.unsqueeze(0)
         for block in self.blocks:
             if isinstance(block, TemporalTransformerBlock):
                 x = block(x)

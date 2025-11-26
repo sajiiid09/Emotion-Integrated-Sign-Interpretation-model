@@ -9,34 +9,12 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from models.classifier import MultiTaskHead
-from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
-from models.fusion import FusionMLP
+from models.fusion import FusionModel
 from train.dataset import BdSLDataset
 
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("train_fusion")
-
-
-class FusionModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.hand_encoder = HandEncoder()
-        self.face_encoder = FaceEncoder()
-        self.pose_encoder = PoseEncoder()
-        fusion_dim = self.hand_encoder.config.model_dim + self.face_encoder.config.model_dim + self.pose_encoder.config.model_dim
-        self.fusion = FusionMLP(input_dim=fusion_dim)
-        self.head = MultiTaskHead(128)
-
-    def forward(self, batch):
-        hand = torch.cat((batch["hand_left"], batch["hand_right"]), dim=-1)
-        hand_feat = self.hand_encoder(hand.view(hand.size(0), hand.size(1), -1))
-        face_feat = self.face_encoder(batch["face"].view(batch["face"].size(0), batch["face"].size(1), -1))
-        pose_feat = self.pose_encoder(batch["pose"].view(batch["pose"].size(0), batch["pose"].size(1), -1))
-        fused = torch.cat([hand_feat, face_feat, pose_feat], dim=1)
-        fused = self.fusion(fused)
-        return self.head(fused)
 
 
 def parse_args():
@@ -48,6 +26,13 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--num-workers", type=int, default=4, help="DataLoader worker count.")
+    parser.add_argument(
+        "--no-pin-memory",
+        action="store_false",
+        dest="pin_memory",
+        help="Disable DataLoader pin_memory (enabled by default for GPU training).",
+    )
     return parser.parse_args()
 
 
@@ -56,8 +41,19 @@ def train():
     device = torch.device(args.device)
     train_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="train")
     val_dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="val")
-    loader_train = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    loader_val = DataLoader(val_dataset, batch_size=args.batch_size)
+    loader_train = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory and device.type == "cuda",
+    )
+    loader_val = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory and device.type == "cuda",
+    )
 
     model = FusionModel().to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
