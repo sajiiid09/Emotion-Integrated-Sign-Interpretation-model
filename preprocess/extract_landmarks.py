@@ -120,6 +120,9 @@ def _process_video_file(
 def main() -> None:
     args = parse_args()
     config = NormalizationConfig(sequence_length=args.sequence_length)
+    LOGGER.info(
+        "Normalization centers all modalities at the neck and shares a common scale; regenerate any existing landmarks."
+    )
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     video_paths = sorted(args.video_dir.glob("*.mp4"))

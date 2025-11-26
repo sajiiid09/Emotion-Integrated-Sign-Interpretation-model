@@ -5,6 +5,8 @@ import argparse
 import time
 from pathlib import Path
 
+from collections import deque
+
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -34,8 +36,6 @@ def main():
     holistic = mp.solutions.holistic.Holistic()
     cap = cv2.VideoCapture(0)
     buffers = _init_buffers(args.buffer)
-    write_idx = 0
-    filled = 0
     config = NormalizationConfig(sequence_length=args.buffer)
     ema_sign = None
     ema_grammar = None
@@ -54,11 +54,10 @@ def main():
             "face": _landmark_array(result.face_landmarks, 468),
             "pose": _landmark_array(result.pose_landmarks, 33),
         }
-        write_idx = _write_sample(buffers, sample, write_idx)
-        filled = min(filled + 1, args.buffer)
+        _append_sample(buffers, sample)
 
-        if filled == args.buffer:
-            ordered = _ordered_window(buffers, write_idx)
+        if len(buffers["pose"]) == args.buffer:
+            ordered = _stack_window(buffers)
             normalized = normalize_sample(ordered, config)
             tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
             with torch.no_grad():
@@ -95,29 +94,22 @@ def _landmark_array(landmarks, size: int) -> np.ndarray:
     return np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark], dtype=np.float32)
 
 
-def _init_buffers(size: int) -> dict[str, np.ndarray]:
+def _init_buffers(size: int) -> dict[str, deque]:
     return {
-        "hand_left": np.zeros((size, HAND_POINTS, 3), dtype=np.float32),
-        "hand_right": np.zeros((size, HAND_POINTS, 3), dtype=np.float32),
-        "face": np.zeros((size, FACE_POINTS, 3), dtype=np.float32),
-        "pose": np.zeros((size, POSE_POINTS, 3), dtype=np.float32),
+        "hand_left": deque(maxlen=size),
+        "hand_right": deque(maxlen=size),
+        "face": deque(maxlen=size),
+        "pose": deque(maxlen=size),
     }
 
 
-def _write_sample(buffers: dict[str, np.ndarray], sample: dict[str, np.ndarray], write_idx: int) -> int:
-    for key, array in buffers.items():
-        array[write_idx] = sample[key]
-    return (write_idx + 1) % buffers["face"].shape[0]
+def _append_sample(buffers: dict[str, deque], sample: dict[str, np.ndarray]) -> None:
+    for key, buffer in buffers.items():
+        buffer.append(sample[key])
 
 
-def _ordered_window(buffers: dict[str, np.ndarray], write_idx: int) -> dict[str, np.ndarray]:
-    window = {}
-    for key, array in buffers.items():
-        if write_idx == 0:
-            window[key] = array
-        else:
-            window[key] = np.concatenate((array[write_idx:], array[:write_idx]), axis=0)
-    return window
+def _stack_window(buffers: dict[str, deque]) -> dict[str, np.ndarray]:
+    return {key: np.stack(list(buffer), axis=0) for key, buffer in buffers.items()}
 
 
 if __name__ == "__main__":
