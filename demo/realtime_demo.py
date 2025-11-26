@@ -5,6 +5,8 @@ import argparse
 import time
 from pathlib import Path
 
+from collections import deque
+
 import cv2
 import mediapipe as mp
 import numpy as np
