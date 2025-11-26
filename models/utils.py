@@ -10,6 +10,8 @@ from torch import nn
 
 def sinusoidal_position_encoding(length: int, dim: int, device: Optional[torch.device] = None) -> torch.Tensor:
     """Create sinusoidal positional embeddings."""
+    if dim % 2 != 0:
+        raise ValueError("Sinusoidal positional encoding expects an even model dimension.")
     position = torch.arange(length, device=device).unsqueeze(1)
     div_term = torch.exp(torch.arange(0, dim, 2, device=device) * (-math.log(10000.0) / dim))
     pe = torch.zeros(length, dim, device=device)

@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from models.classifier import MultiTaskHead
 from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
 from models.fusion import FusionMLP
-from train.dataset import BdSLDataset
+from train.dataset import BdSLDataset, SignerSplits
 
 
 class AblationModel(nn.Module):
@@ -47,13 +47,13 @@ class AblationModel(nn.Module):
         return self.head(fused)
 
 
-def run_ablation(name: str, config: tuple[bool, bool, bool], loader, device):
+def run_ablation(name: str, config: tuple[bool, bool, bool], train_loader, val_loader, device):
     model = AblationModel(*config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
     criterion = nn.CrossEntropyLoss()
     model.train()
     for _ in range(5):
-        for batch in loader:
+        for batch in train_loader:
             batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
             optimizer.zero_grad()
             sign_logits, grammar_logits = model(batch)
@@ -62,7 +62,7 @@ def run_ablation(name: str, config: tuple[bool, bool, bool], loader, device):
             )
             loss.backward()
             optimizer.step()
-    accuracy = evaluate(model, loader, device)
+    accuracy = evaluate(model, val_loader, device)
     print(f"{name}: accuracy={accuracy:.3f}")
 
 
@@ -84,14 +84,25 @@ def parse_args():
     parser.add_argument("manifest", type=Path)
     parser.add_argument("landmarks", type=Path)
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--val-signers", nargs="+", required=True)
+    parser.add_argument("--test-signers", nargs="+", required=True)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="val")
-    loader = DataLoader(dataset, batch_size=64, shuffle=True)
+    signer_splits = SignerSplits(args.train_signers, args.val_signers, args.test_signers)
+    train_loader = DataLoader(
+        BdSLDataset(args.manifest, args.landmarks, signer_splits, split="train"),
+        batch_size=64,
+        shuffle=True,
+    )
+    val_loader = DataLoader(
+        BdSLDataset(args.manifest, args.landmarks, signer_splits, split="val"),
+        batch_size=64,
+        shuffle=False,
+    )
     device = torch.device(args.device)
 
     ablations = {
@@ -103,7 +114,7 @@ def main():
     }
 
     for name, cfg in ablations.items():
-        run_ablation(name, cfg, loader, device)
+        run_ablation(name, cfg, train_loader, val_loader, device)
 
 
 if __name__ == "__main__":

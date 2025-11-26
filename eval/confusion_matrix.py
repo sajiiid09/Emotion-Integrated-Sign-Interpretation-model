@@ -10,8 +10,8 @@ import torch
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
 
-from eval.evaluate import FusionModel
-from train.dataset import BdSLDataset
+from models.fusion import FusionModel
+from train.dataset import BdSLDataset, SignerSplits
 
 
 def parse_args():
@@ -20,6 +20,8 @@ def parse_args():
     parser.add_argument("landmarks", type=Path)
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--train-signers", nargs="+", required=True)
+    parser.add_argument("--val-signers", nargs="+", required=True)
+    parser.add_argument("--test-signers", nargs="+", required=True)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output", type=Path, default=Path("confusion_matrices.png"))
     return parser.parse_args()
@@ -27,7 +29,8 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dataset = BdSLDataset(args.manifest, args.landmarks, args.train_signers, split="test")
+    signer_splits = SignerSplits(args.train_signers, args.val_signers, args.test_signers)
+    dataset = BdSLDataset(args.manifest, args.landmarks, signer_splits, split="test")
     loader = DataLoader(dataset, batch_size=64)
     device = torch.device(args.device)
     model = FusionModel().to(device)
