@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import argparse
-import collections
 import time
 from pathlib import Path
+
+from collections import deque
 
 import cv2
 import mediapipe as mp
@@ -12,30 +13,9 @@ import numpy as np
 import torch
 
 from demo.ui_helpers import draw_landmarks, overlay_text
-from models.classifier import MultiTaskHead
-from models.encoders import FaceEncoder, HandEncoder, PoseEncoder
-from models.fusion import FusionMLP
-from preprocess.normalize import NormalizationConfig, normalize_sample, pad_or_crop
-
-
-class FusionModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.hand_encoder = HandEncoder()
-        self.face_encoder = FaceEncoder()
-        self.pose_encoder = PoseEncoder()
-        fusion_dim = self.hand_encoder.config.model_dim + self.face_encoder.config.model_dim + self.pose_encoder.config.model_dim
-        self.fusion = FusionMLP(input_dim=fusion_dim)
-        self.head = MultiTaskHead(128)
-
-    def forward(self, sample):
-        hand = torch.cat((sample["hand_left"], sample["hand_right"]), dim=-1)
-        hand_feat = self.hand_encoder(hand.view(hand.size(0), hand.size(1), -1))
-        face_feat = self.face_encoder(sample["face"].view(sample["face"].size(0), sample["face"].size(1), -1))
-        pose_feat = self.pose_encoder(sample["pose"].view(sample["pose"].size(0), sample["pose"].size(1), -1))
-        fused = torch.cat([hand_feat, face_feat, pose_feat], dim=1)
-        fused = self.fusion(fused)
-        return self.head(fused)
+from models.fusion import FusionModel
+from models.constants import FACE_POINTS, HAND_POINTS, POSE_POINTS
+from preprocess.normalize import NormalizationConfig, normalize_sample
 
 
 def parse_args():
@@ -55,7 +35,7 @@ def main():
 
     holistic = mp.solutions.holistic.Holistic()
     cap = cv2.VideoCapture(0)
-    buffer = collections.deque(maxlen=args.buffer)
+    buffers = _init_buffers(args.buffer)
     config = NormalizationConfig(sequence_length=args.buffer)
     ema_sign = None
     ema_grammar = None
@@ -74,11 +54,11 @@ def main():
             "face": _landmark_array(result.face_landmarks, 468),
             "pose": _landmark_array(result.pose_landmarks, 33),
         }
-        buffer.append(sample)
+        _append_sample(buffers, sample)
 
-        if len(buffer) == buffer.maxlen:
-            stacked = _stack_buffer(buffer)
-            normalized = normalize_sample(stacked, config)
+        if len(buffers["pose"]) == args.buffer:
+            ordered = _stack_window(buffers)
+            normalized = normalize_sample(ordered, config)
             tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
             with torch.no_grad():
                 sign_logits, grammar_logits = model(tensor_sample)
@@ -114,12 +94,22 @@ def _landmark_array(landmarks, size: int) -> np.ndarray:
     return np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark], dtype=np.float32)
 
 
-def _stack_buffer(buffer):
-    stacked = {key: [] for key in buffer[0].keys()}
-    for sample in buffer:
-        for key, value in sample.items():
-            stacked[key].append(value)
-    return {k: pad_or_crop(np.stack(v), len(buffer)) for k, v in stacked.items()}
+def _init_buffers(size: int) -> dict[str, deque]:
+    return {
+        "hand_left": deque(maxlen=size),
+        "hand_right": deque(maxlen=size),
+        "face": deque(maxlen=size),
+        "pose": deque(maxlen=size),
+    }
+
+
+def _append_sample(buffers: dict[str, deque], sample: dict[str, np.ndarray]) -> None:
+    for key, buffer in buffers.items():
+        buffer.append(sample[key])
+
+
+def _stack_window(buffers: dict[str, deque]) -> dict[str, np.ndarray]:
+    return {key: np.stack(list(buffer), axis=0) for key, buffer in buffers.items()}
 
 
 if __name__ == "__main__":

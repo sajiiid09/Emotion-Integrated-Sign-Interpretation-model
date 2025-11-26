@@ -6,7 +6,8 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from models.utils import TemporalConvBlock, TemporalTransformerBlock
+from models.constants import FACE_IN_DIM, HAND_IN_DIM, POSE_IN_DIM
+from models.utils import TemporalConvBlock, TemporalTransformerBlock, sinusoidal_position_encoding
 
 
 @dataclass
@@ -34,6 +35,12 @@ class BaseEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
+        if any(isinstance(block, TemporalTransformerBlock) for block in self.blocks):
+            # Add positional encodings so transformer blocks can model temporal order.
+            # NOTE: Models need to be retrained after this change to keep performance expectations.
+            seq_len = x.size(1)
+            pos_emb = sinusoidal_position_encoding(seq_len, self.config.model_dim, device=x.device)
+            x = x + pos_emb.unsqueeze(0)
         for block in self.blocks:
             if isinstance(block, TemporalTransformerBlock):
                 x = block(x)
@@ -44,15 +51,15 @@ class BaseEncoder(nn.Module):
 
 
 class HandEncoder(BaseEncoder):
-    def __init__(self, input_dim: int = 21 * 3 * 2, **kwargs):
+    def __init__(self, input_dim: int = HAND_IN_DIM, **kwargs):
         super().__init__(EncoderConfig(input_dim=input_dim, **kwargs))
 
 
 class FaceEncoder(BaseEncoder):
-    def __init__(self, input_dim: int = 468 * 3, **kwargs):
+    def __init__(self, input_dim: int = FACE_IN_DIM, **kwargs):
         super().__init__(EncoderConfig(input_dim=input_dim, **kwargs))
 
 
 class PoseEncoder(BaseEncoder):
-    def __init__(self, input_dim: int = 33 * 3, **kwargs):
+    def __init__(self, input_dim: int = POSE_IN_DIM, **kwargs):
         super().__init__(EncoderConfig(input_dim=input_dim, **kwargs))
