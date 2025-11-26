@@ -25,7 +25,11 @@ MIN_SCALE = 0.1
 
 @dataclass
 class NormalizationConfig:
-    """Configuration for landmark normalization."""
+    """Configuration for landmark normalization.
+
+    ``use_face_pca`` should mirror the model-side flag (``models.config.USE_FACE_PCA``)
+    to keep feature dimensions consistent with the FaceEncoder input.
+    """
 
     face_pca_components: int = 128
     face_pca_path: Optional[Path] = None

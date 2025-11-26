@@ -31,7 +31,7 @@ project/
    python capture/record_videos.py data/raw <word> S01 1 1 --metadata data/manifest.csv --grammar neutral
    ```
    - Resolution: 1080p @ 30 FPS
-   - Filename format: `<word>__S<id>__sess<id>__rep<id>.mp4`
+   - Filename format: `<word>__S<id>__sess<id>__rep<id>__<grammar>.mp4` (grammar in {neutral, question, negation})
 
 2. **Build or update manifest** (if recording without `--metadata`):
    ```bash

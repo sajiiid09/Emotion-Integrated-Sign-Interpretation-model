@@ -51,11 +51,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_filename(word: str, signer_id: str, session_id: int, repetition: int) -> str:
-    """Create standardized filename."""
+def build_filename(
+    word: str, signer_id: str, session_id: int, repetition: int, grammar: str
+) -> str:
+    """Create standardized filename including grammar label.
+
+    Schema: ``<word>__<signer>__sessXX__repYY__<grammar>.mp4`` where grammar is one of
+    {neutral, question, negation}. The grammar token is preserved end-to-end for the
+    secondary facial grammar task.
+    """
+
     session_str = f"sess{session_id:02d}"
     rep_str = f"rep{repetition:02d}"
-    return f"{word}__{signer_id}__{session_str}__{rep_str}.mp4"
+    return f"{word}__{signer_id}__{session_str}__{rep_str}__{grammar}.mp4"
 
 
 def get_video_writer(path: Path, fps: float, size: Tuple[int, int]) -> cv2.VideoWriter:
@@ -69,7 +77,9 @@ def record_clip(args: argparse.Namespace) -> None:
     output_dir: Path = args.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = build_filename(args.word, args.signer_id, args.session_id, args.repetition)
+    filename = build_filename(
+        args.word, args.signer_id, args.session_id, args.repetition, args.grammar
+    )
     video_path = output_dir / filename
 
     cap = cv2.VideoCapture(args.camera)

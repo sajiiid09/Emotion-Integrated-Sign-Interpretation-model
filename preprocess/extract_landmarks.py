@@ -12,6 +12,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+from models.constants import FACE_POINTS, HAND_POINTS, POSE_POINTS
 from preprocess.normalize import NormalizationConfig, normalize_sample, pad_or_crop
 
 
@@ -63,10 +64,10 @@ def extract_video(video_path: Path, seq_len: int, max_frames: int = 300) -> Dict
                 break
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             result = holistic.process(image_rgb)
-            frames_hand_left.append(_landmark_array(result.left_hand_landmarks, 21))
-            frames_hand_right.append(_landmark_array(result.right_hand_landmarks, 21))
-            frames_face.append(_landmark_array(result.face_landmarks, 468))
-            frames_pose.append(_landmark_array(result.pose_landmarks, 33))
+            frames_hand_left.append(_landmark_array(result.left_hand_landmarks, HAND_POINTS))
+            frames_hand_right.append(_landmark_array(result.right_hand_landmarks, HAND_POINTS))
+            frames_face.append(_landmark_array(result.face_landmarks, FACE_POINTS))
+            frames_pose.append(_landmark_array(result.pose_landmarks, POSE_POINTS))
             frame_count += 1
             if frame_count >= max_frames:
                 LOGGER.warning("Reached frame limit (%s) for %s; truncating clip", max_frames, video_path.name)
