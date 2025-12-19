@@ -19,7 +19,7 @@ LOGGER = logging.getLogger("train_baselines")
 
 
 class SingleStreamModel(nn.Module):
-    def __init__(self, encoder: nn.Module, num_signs: int = 60, num_grammar: int = 3):
+    def __init__(self, encoder: nn.Module, num_signs: int = 60, num_grammar: int = 5):
         super().__init__()
         self.encoder = encoder
         self.head = MultiTaskHead(encoder.config.model_dim, num_signs, num_grammar)
