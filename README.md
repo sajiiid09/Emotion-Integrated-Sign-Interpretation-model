@@ -71,14 +71,28 @@ project/
    ```
 
 ## Real-Time Demo
-After training the fusion model:
-```bash
-python demo/realtime_demo.py fusion_model.pt --device cpu --buffer 48
-```
-- Maintains a sliding window of 48 frames
-- Runs MediaPipe Holistic + PyTorch inference
-- Applies exponential moving average for prediction smoothing
-- Displays FPS, sign class, and grammar label overlays
+Phase 7 adds the AI tutor HUD and Brain executor into the webcam loop.
+
+1) Place a Bangla font (e.g., `kalpurush.ttf` or `SolaimanLipi.ttf`) in `demo/`.
+2) (Optional) Export a Gemini key if you want live model responses:
+   ```bash
+   export GEMINI_API_KEY="<your key>"
+   ```
+3) Run the demo (stub mode by default):
+   ```bash
+   python demo/realtime_demo.py fusion_model.pt --device cpu --buffer 48
+   ```
+
+HUD controls:
+- **q / ESC**: quit
+- **c**: clear buffered words
+- **g**: toggle Gemini on/off (restarts executor safely)
+- **p**: toggle prompt preview in HUD
+
+Notes:
+- The sentence buffer only accepts a word after it stays stable for several frames and above the confidence threshold.
+- Tokens submitted to the Brain module exclude punctuation; question intent is inferred from the grammar tag.
+- If no manifest is available, labels fall back to `#<idx>` numbering.
 
 ## Notes
 - `data/manifest.csv` defines signer-independent train/val/test splits through explicit signer lists.

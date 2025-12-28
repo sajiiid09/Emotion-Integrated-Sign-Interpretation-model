@@ -1,91 +1,55 @@
-"""Real-time BdSL recognition demo using webcam input."""
+"""Real-time BdSL recognition demo with Brain HUD integration."""
+
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import time
 from pathlib import Path
-
-from collections import deque
+from typing import Optional
 
 import cv2
 import mediapipe as mp
 import numpy as np
 import torch
 
-from demo.ui_helpers import draw_landmarks, overlay_text
-from models.fusion import FusionModel
+from brain import BrainExecutor, BrainOutput, load_config
+from demo.hud_renderer import HUDRenderer
 from models.constants import FACE_POINTS, HAND_POINTS, POSE_POINTS
+from models.fusion import FusionModel
 from preprocess.normalize import NormalizationConfig, normalize_sample
+from train.vocab import build_vocab_from_manifest
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Run real-time BdSL demo.")
+GRAMMAR_IDX_TO_TAG = ["neutral", "question", "negation", "happy", "sad"]
+DEFAULT_STABLE_FRAMES = 10
+DEFAULT_MIN_CONF = 0.60
+MAX_SENTENCE_WORDS = 12
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run real-time BdSL demo with AI tutor overlay.")
     parser.add_argument("checkpoint", type=Path, help="Path to trained fusion model weights.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--buffer", type=int, default=48)
+    parser.add_argument("--buffer", type=int, default=48, help="Sliding window length for model input.")
+    parser.add_argument("--manifest", type=Path, default=Path("data/manifest.csv"), help="Manifest CSV to recover vocabulary labels.")
+    parser.add_argument("--font-path", type=Path, default=Path("demo/kalpurush.ttf"), help="Path to Bangla font (kalpurush/SolaimanLipi).")
+    parser.add_argument("--stable-frames", type=int, default=DEFAULT_STABLE_FRAMES, help="Frames required before accepting a word.")
+    parser.add_argument("--min-conf", type=float, default=DEFAULT_MIN_CONF, help="Confidence threshold for stable word selection.")
+    parser.add_argument("--use-gemini", action="store_true", help="Force Gemini usage regardless of env config.")
+    parser.add_argument("--no-gemini", action="store_true", help="Force stub mode regardless of env config.")
+    parser.add_argument("--show-prompt", action="store_true", help="Show prompt preview in HUD debug strip.")
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
-    device = torch.device(args.device)
-    model = FusionModel().to(device)
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
-    model.eval()
-
-    holistic = mp.solutions.holistic.Holistic()
-    cap = cv2.VideoCapture(0)
-    buffers = _init_buffers(args.buffer)
-    config = NormalizationConfig(sequence_length=args.buffer)
-    ema_sign = None
-    ema_grammar = None
-    alpha = 0.6
-
-    while True:
-        start = time.time()
-        ret, frame = cap.read()
-        if not ret:
-            break
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = holistic.process(image_rgb)
-        sample = {
-            "hand_left": _landmark_array(result.left_hand_landmarks, HAND_POINTS),
-            "hand_right": _landmark_array(result.right_hand_landmarks, HAND_POINTS),
-            "face": _landmark_array(result.face_landmarks, FACE_POINTS),
-            "pose": _landmark_array(result.pose_landmarks, POSE_POINTS),
-        }
-        _append_sample(buffers, sample)
-
-        if _is_full(buffers):
-            ordered = _stack_window(buffers)
-            normalized = normalize_sample(ordered, config)
-            tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
-            with torch.no_grad():
-                sign_logits, grammar_logits = model(tensor_sample)
-            sign_prob = torch.softmax(sign_logits, dim=1)
-            grammar_prob = torch.softmax(grammar_logits, dim=1)
-            ema_sign = sign_prob if ema_sign is None else alpha * sign_prob + (1 - alpha) * ema_sign
-            ema_grammar = (
-                grammar_prob if ema_grammar is None else alpha * grammar_prob + (1 - alpha) * ema_grammar
-            )
-            sign_pred = int(torch.argmax(ema_sign))
-            grammar_pred = int(torch.argmax(ema_grammar))
-        else:
-            sign_pred = grammar_pred = -1
-
-        overlay = overlay_text(
-            frame.copy(),
-            sign=f"#{sign_pred}" if sign_pred >= 0 else "...",
-            grammar=f"#{grammar_pred}" if grammar_pred >= 0 else "...",
-            fps=1.0 / (time.time() - start),
-        )
-        cv2.imshow("BdSL Demo", overlay)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    holistic.close()
-    cv2.destroyAllWindows()
+def load_labels(manifest_path: Path) -> list[str]:
+    if not manifest_path.exists() or manifest_path.stat().st_size == 0:
+        return []
+    try:
+        vocab = build_vocab_from_manifest(manifest_path)
+    except Exception:
+        return []
+    return vocab.idx_to_label
 
 
 def _landmark_array(landmarks, size: int) -> np.ndarray:
@@ -95,8 +59,6 @@ def _landmark_array(landmarks, size: int) -> np.ndarray:
 
 
 def _init_buffers(size: int) -> dict[str, dict[str, np.ndarray | int]]:
-    """Preallocate circular buffers to minimize per-frame allocations."""
-
     return {
         "hand_left": {"data": np.zeros((size, HAND_POINTS, 3), dtype=np.float32), "write_idx": 0, "filled": 0},
         "hand_right": {"data": np.zeros((size, HAND_POINTS, 3), dtype=np.float32), "write_idx": 0, "filled": 0},
@@ -108,11 +70,9 @@ def _init_buffers(size: int) -> dict[str, dict[str, np.ndarray | int]]:
 def _append_sample(buffers: dict[str, dict[str, np.ndarray | int]], sample: dict[str, np.ndarray]) -> None:
     for key, buffer in buffers.items():
         buffer["data"][buffer["write_idx"]] = sample[key]
-    # All buffers share the same write index/fill; update once using one of them
     first = next(iter(buffers.values()))
     first["write_idx"] = (first["write_idx"] + 1) % first["data"].shape[0]
     first["filled"] = min(first["filled"] + 1, first["data"].shape[0])
-    # Propagate updated indices to keep buffers aligned
     for buffer in buffers.values():
         buffer["write_idx"] = first["write_idx"]
         buffer["filled"] = first["filled"]
@@ -124,8 +84,6 @@ def _is_full(buffers: dict[str, dict[str, np.ndarray | int]]) -> bool:
 
 
 def _stack_window(buffers: dict[str, dict[str, np.ndarray | int]]) -> dict[str, np.ndarray]:
-    """Return the current window in chronological order without per-frame stacking."""
-
     stacked = {}
     sample_meta = next(iter(buffers.values()))
     size = sample_meta["data"].shape[0]
@@ -137,10 +95,178 @@ def _stack_window(buffers: dict[str, dict[str, np.ndarray | int]]) -> dict[str, 
         if write_idx == 0:
             stacked[key] = buffer["data"]
         else:
-            stacked[key] = np.concatenate(
-                (buffer["data"][write_idx:], buffer["data"][:write_idx]), axis=0
-            )
+            stacked[key] = np.concatenate((buffer["data"][write_idx:], buffer["data"][:write_idx]), axis=0)
     return stacked
+
+
+def _format_word(sign_idx: int, labels: list[str]) -> str:
+    if sign_idx < 0:
+        return "..."
+    if labels and 0 <= sign_idx < len(labels):
+        return labels[sign_idx]
+    return f"#{sign_idx}"
+
+
+def _extract_prompt_preview(output: BrainOutput | None, limit: int = 120) -> str | None:
+    if not output:
+        return None
+    prompt_debug = output.debug.get("prompt") if output.debug else None
+    if not isinstance(prompt_debug, dict):
+        return None
+    text_preview: Optional[str] = prompt_debug.get("as_text") or prompt_debug.get("as_text_preview")
+    if not text_preview:
+        return None
+    return text_preview[:limit]
+
+
+def main() -> None:
+    args = parse_args()
+    device = torch.device(args.device)
+    model = FusionModel().to(device)
+    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    model.eval()
+
+    cfg = load_config()
+    if args.use_gemini:
+        cfg = dataclasses.replace(cfg, use_gemini=True)
+    if args.no_gemini:
+        cfg = dataclasses.replace(cfg, use_gemini=False)
+
+    executor = BrainExecutor(cfg)
+    executor.start()
+
+    holistic = mp.solutions.holistic.Holistic()
+    cap = cv2.VideoCapture(0)
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to read from camera.")
+        executor.stop()
+        cap.release()
+        holistic.close()
+        return
+
+    renderer = HUDRenderer(frame.shape, font_path=args.font_path)
+    buffers = _init_buffers(args.buffer)
+    config = NormalizationConfig(sequence_length=args.buffer)
+    ema_sign = None
+    ema_grammar = None
+    alpha = 0.6
+    idx_to_label = load_labels(args.manifest)
+    stable_count = 0
+    last_word_frame: Optional[str] = None
+    last_stable_word: Optional[str] = None
+    sentence_buffer: list[str] = []
+    last_submitted_signature = ""
+    use_gemini_override = cfg.use_gemini
+    show_prompt = args.show_prompt
+
+    try:
+        while True:
+            start = time.time()
+            ret, frame = cap.read()
+            if not ret:
+                break
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            result = holistic.process(image_rgb)
+            sample = {
+                "hand_left": _landmark_array(result.left_hand_landmarks, HAND_POINTS),
+                "hand_right": _landmark_array(result.right_hand_landmarks, HAND_POINTS),
+                "face": _landmark_array(result.face_landmarks, FACE_POINTS),
+                "pose": _landmark_array(result.pose_landmarks, POSE_POINTS),
+            }
+            _append_sample(buffers, sample)
+
+            sign_pred = -1
+            grammar_pred = -1
+            sign_conf = 0.0
+            grammar_tag = "neutral"
+            if _is_full(buffers):
+                ordered = _stack_window(buffers)
+                normalized = normalize_sample(ordered, config)
+                tensor_sample = {k: torch.from_numpy(v).unsqueeze(0).to(device).float() for k, v in normalized.items()}
+                with torch.no_grad():
+                    sign_logits, grammar_logits = model(tensor_sample)
+                sign_prob = torch.softmax(sign_logits, dim=1)
+                grammar_prob = torch.softmax(grammar_logits, dim=1)
+                ema_sign = sign_prob if ema_sign is None else alpha * sign_prob + (1 - alpha) * ema_sign
+                ema_grammar = grammar_prob if ema_grammar is None else alpha * grammar_prob + (1 - alpha) * ema_grammar
+                sign_pred = int(torch.argmax(ema_sign))
+                grammar_pred = int(torch.argmax(ema_grammar))
+                sign_conf = float(ema_sign[0, sign_pred]) if ema_sign is not None else 0.0
+                grammar_tag = GRAMMAR_IDX_TO_TAG[grammar_pred] if 0 <= grammar_pred < len(GRAMMAR_IDX_TO_TAG) else "neutral"
+
+            current_word = _format_word(sign_pred, idx_to_label)
+            if current_word == last_word_frame and sign_conf >= args.min_conf:
+                stable_count += 1
+            else:
+                stable_count = 0
+            last_word_frame = current_word
+
+            new_word_added = False
+            if stable_count >= args.stable_frames and current_word not in (None, "..."):
+                if current_word != last_stable_word:
+                    sentence_buffer.append(current_word)
+                    last_stable_word = current_word
+                    stable_count = 0
+                    new_word_added = True
+                    if len(sentence_buffer) > MAX_SENTENCE_WORDS:
+                        sentence_buffer = sentence_buffer[-MAX_SENTENCE_WORDS:]
+
+            display_sentence = " ".join(sentence_buffer)
+            tag_for_submission = grammar_tag or "neutral"
+            signature = f"{display_sentence}|{tag_for_submission}"
+            if (new_word_added or signature != last_submitted_signature) and (sentence_buffer or tag_for_submission != "neutral"):
+                executor.submit_tokens(sentence_buffer + [tag_for_submission])
+                last_submitted_signature = signature
+
+            snapshot = executor.poll_latest()
+            last_output: Optional[BrainOutput] = snapshot.last_output
+            tutor_text = last_output.response_bn if last_output else "ভাবছি..."
+            resolved_tag = last_output.resolved_emotion if last_output else tag_for_submission
+            latency_ms = last_output.latency_ms if last_output else None
+            if snapshot.status == "thinking" and (not last_output or last_output.response_bn == ""):
+                tutor_text = "ভাবছি..."
+
+            prompt_preview = _extract_prompt_preview(last_output) if show_prompt else None
+
+            overlay = renderer.render(
+                frame,
+                status=snapshot.status,
+                predicted_word=current_word,
+                confidence=sign_conf,
+                resolved_tag=resolved_tag,
+                display_sentence=display_sentence if grammar_tag != "question" else f"{display_sentence}?",
+                tutor_text=tutor_text,
+                fps=1.0 / max((time.time() - start), 1e-6),
+                latency_ms=latency_ms,
+                prompt_preview=prompt_preview,
+            )
+
+            cv2.imshow("BdSL Demo", overlay)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), 27):
+                break
+            if key == ord("c"):
+                sentence_buffer.clear()
+                last_stable_word = None
+                stable_count = 0
+                last_submitted_signature = ""
+            if key == ord("g"):
+                use_gemini_override = not use_gemini_override
+                cfg = dataclasses.replace(cfg, use_gemini=use_gemini_override)
+                executor.stop()
+                executor = BrainExecutor(cfg)
+                executor.start()
+                if sentence_buffer or tag_for_submission != "neutral":
+                    executor.submit_tokens(sentence_buffer + [tag_for_submission])
+            if key == ord("p"):
+                show_prompt = not show_prompt
+
+    finally:
+        executor.stop()
+        cap.release()
+        holistic.close()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
