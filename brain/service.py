@@ -1,8 +1,8 @@
-"""Core Brain service logic (Phase 3).
+"""Core Brain service logic (Phase 4).
 
 Provides deterministic placeholder responses with robust normalization,
-intent parsing, and contradiction resolution via a rule engine to withstand
-noisy upstream inputs.
+intent parsing, contradiction resolution, and prompt construction ready
+for downstream LLM providers (implemented in later phases).
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .constants import (
     UNKNOWN_TOKEN_PATTERNS,
 )
 from .intent import Intent, ResolvedIntent, intent_to_debug, resolved_intent_to_debug
+from .prompt_builder import build_prompt
 from .rules import resolve_emotion
 from .types import BrainInput, BrainOutput, BrainStatus, EmotionTag
 
@@ -228,10 +229,12 @@ def _respond_with_intent(
     emotion: EmotionTag = intent.detected_emotion
     status: BrainStatus = "error"
     error: str | None = None
+    prompt = None
 
     try:
         resolved = resolve_emotion(intent)
         emotion = resolved.resolved_emotion
+        prompt = build_prompt(resolved, cfg=config)
         response = _generate_response_text(resolved.keywords, emotion)
         response = _enforce_word_limit(response, config.max_response_words)
         status = "ready"
@@ -244,6 +247,19 @@ def _respond_with_intent(
 
     latency_ms = int((end - start) * 1000)
 
+    prompt_debug: dict[str, object | None] = {}
+    if prompt:
+        prompt_debug["preview"] = prompt.as_text[:200]
+        prompt_debug["metadata"] = prompt.debug
+        if config.debug:
+            prompt_debug.update(
+                {
+                    "system": prompt.system,
+                    "user": prompt.user,
+                    "as_text": prompt.as_text,
+                }
+            )
+
     debug = {
         "raw_keywords": intent.raw_keywords,
         "normalized_keywords": intent.keywords,
@@ -253,6 +269,7 @@ def _respond_with_intent(
         "rule_trace": resolved.rule_trace if resolved else None,
         "normalization": normalization_debug,
         "token_stats": token_stats,
+        "prompt": prompt_debug if prompt_debug else None,
     }
 
     return BrainOutput(
