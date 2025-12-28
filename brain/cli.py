@@ -6,7 +6,7 @@ import argparse
 from typing import Sequence
 
 from .config import load_config
-from .service import respond, respond_from_list
+from .service import respond, respond_from_list, split_keywords_text
 from .types import BrainInput
 
 
@@ -28,6 +28,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=str,
         help="Space separated tokens; last token may be an emotion tag",
     )
+    parser.add_argument(
+        "--show-debug",
+        action="store_true",
+        help="Print debug info even when debug config is off",
+    )
     return parser.parse_args(argv)
 
 
@@ -36,10 +41,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     cfg = load_config()
 
     if args.tokens:
-        tokens = args.tokens.split()
+        tokens = split_keywords_text(args.tokens)
         output = respond_from_list(tokens, cfg=cfg)
     elif args.keywords is not None:
-        keywords = args.keywords.split()
+        keywords = split_keywords_text(args.keywords)
         brain_input = BrainInput(keywords=keywords, emotion=args.emotion)  # type: ignore[arg-type]
         output = respond(brain_input, cfg=cfg)
     else:
@@ -47,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     print(output.response_bn)
     print(f"status={output.status} emotion={output.resolved_emotion} latency_ms={output.latency_ms}")
-    if cfg.debug:
+    if cfg.debug or args.show_debug:
         print(f"debug={output.debug}")
 
 

@@ -1,38 +1,115 @@
-"""Core Brain service stub for Phase 1.
+"""Core Brain service logic (Phase 2).
 
-This module provides deterministic placeholder responses while establishing a
-stable, testable interface for future phases.
+Provides deterministic placeholder responses with robust normalization and
+intent parsing to withstand noisy upstream inputs.
 """
 
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import cast
 
 from .config import BrainConfig, load_config
-from .constants import ALLOWED_TAGS, DEFAULT_BN, FALLBACK_BN
+from .constants import (
+    ALLOWED_TAGS,
+    DEFAULT_BN,
+    DEDUPE_WINDOW,
+    FALLBACK_BN,
+    MAX_KEYWORDS,
+    PUNCT_STRIP_CHARS,
+    UNKNOWN_TOKEN_PATTERNS,
+)
+from .intent import Intent, intent_to_debug
 from .types import BrainInput, BrainOutput, EmotionTag
 
 
-def normalize_keywords(keywords: list[str]) -> list[str]:
-    """Normalize keyword tokens with light preprocessing.
+@dataclass(frozen=True)
+class _NormalizationResult:
+    cleaned: list[str]
+    removed_unknowns: list[str]
+    removed_tags: list[str]
+    deduped: bool
+    truncated: bool
+    truncated_count: int
 
-    - Strips whitespace from each token.
-    - Drops empty tokens.
-    - Collapses consecutive duplicates while preserving order.
+
+def clean_token(tok: str) -> str:
+    """Trim whitespace and surrounding punctuation, collapsing internal spaces."""
+
+    stripped = tok.strip().strip(PUNCT_STRIP_CHARS)
+    collapsed = " ".join(stripped.split())
+    return collapsed
+
+
+def is_unknown_token(tok: str) -> bool:
+    """Return True if the token matches common unknown patterns or is empty."""
+
+    return not tok or tok.lower() in UNKNOWN_TOKEN_PATTERNS
+
+
+def split_keywords_text(text: str) -> list[str]:
+    """Split a whitespace-separated keyword string for CLI usage."""
+
+    return text.split()
+
+
+def _normalize_keywords_detailed(keywords: list[str]) -> _NormalizationResult:
+    """Normalize keyword tokens with Phase 2 rules.
+
+    Steps:
+    - Clean punctuation/whitespace.
+    - Drop unknown tokens.
+    - Drop tokens that are emotion tags.
+    - Collapse duplicates within a small jitter window.
+    - Truncate to MAX_KEYWORDS, keeping the most recent items.
     """
 
-    normalized: list[str] = []
-    previous: str | None = None
+    cleaned_tokens: list[str] = []
+    removed_unknowns: list[str] = []
+    removed_tags: list[str] = []
+
     for token in keywords:
-        cleaned = token.strip()
-        if not cleaned:
+        cleaned = clean_token(token)
+        if is_unknown_token(cleaned):
+            removed_unknowns.append(token)
             continue
-        if previous is not None and cleaned == previous:
+        if cleaned in ALLOWED_TAGS:
+            removed_tags.append(cleaned)
             continue
-        normalized.append(cleaned)
-        previous = cleaned
-    return normalized
+        if cleaned:
+            cleaned_tokens.append(cleaned)
+
+    deduped_tokens: list[str] = []
+    deduped = False
+    for token in cleaned_tokens:
+        window = deduped_tokens[-(DEDUPE_WINDOW - 1) :] if DEDUPE_WINDOW > 1 else []
+        if token in window:
+            deduped = True
+            continue
+        deduped_tokens.append(token)
+
+    truncated = False
+    truncated_count = 0
+    if len(deduped_tokens) > MAX_KEYWORDS:
+        truncated_count = len(deduped_tokens) - MAX_KEYWORDS
+        deduped_tokens = deduped_tokens[-MAX_KEYWORDS:]
+        truncated = True
+
+    return _NormalizationResult(
+        cleaned=deduped_tokens,
+        removed_unknowns=removed_unknowns,
+        removed_tags=removed_tags,
+        deduped=deduped,
+        truncated=truncated,
+        truncated_count=truncated_count,
+    )
+
+
+def normalize_keywords(keywords: list[str]) -> list[str]:
+    """Backward-compatible normalization wrapper returning only cleaned tokens."""
+
+    return _normalize_keywords_detailed(keywords).cleaned
 
 
 def validate_emotion(tag: str) -> EmotionTag:
@@ -51,27 +128,104 @@ def _enforce_word_limit(text: str, max_words: int) -> str:
     return f"{truncated}…"
 
 
+def parse_intent_from_input(brain_input: BrainInput) -> tuple[Intent, dict[str, object], dict[str, int]]:
+    """Parse an :class:`Intent` from a :class:`BrainInput`.
+
+    Returns the intent, normalization debug, and token statistics.
+    """
+
+    norm_result = _normalize_keywords_detailed(brain_input.keywords)
+    flags = {
+        "had_unknowns": bool(norm_result.removed_unknowns),
+        "had_duplicates": norm_result.deduped,
+        "truncated": norm_result.truncated,
+        "tag_in_keywords": bool(norm_result.removed_tags),
+    }
+
+    notes: list[str] = []
+    if norm_result.removed_unknowns:
+        notes.append("dropped_unknown_tokens")
+    if norm_result.deduped:
+        notes.append("collapsed_duplicates")
+    if norm_result.truncated:
+        notes.append("truncated_keywords")
+    if norm_result.removed_tags:
+        notes.append("removed_emotion_tags_from_keywords")
+
+    intent = Intent(
+        keywords=norm_result.cleaned,
+        raw_keywords=list(brain_input.keywords),
+        detected_emotion=brain_input.emotion,
+        meta=brain_input.meta,
+        flags=flags,
+        notes=notes,
+    )
+
+    normalization_debug = {
+        "removed_unknowns": norm_result.removed_unknowns,
+        "removed_tags": norm_result.removed_tags,
+        "deduped": norm_result.deduped,
+        "truncated": norm_result.truncated,
+        "truncated_count": norm_result.truncated_count,
+    }
+
+    token_stats = {
+        "input_count": len(brain_input.keywords),
+        "cleaned_count": len(norm_result.cleaned),
+        "dropped_unknowns": len(norm_result.removed_unknowns),
+        "dropped_tags": len(norm_result.removed_tags),
+        "truncated_count": norm_result.truncated_count,
+    }
+
+    return intent, normalization_debug, token_stats
+
+
+def parse_intent_from_tokens(tokens: list[str]) -> tuple[Intent, dict[str, object], dict[str, int]]:
+    """Parse an intent from a positional token list."""
+
+    if not tokens:
+        brain_input = BrainInput(keywords=[], emotion="neutral")
+        return parse_intent_from_input(brain_input)
+
+    last_cleaned = clean_token(tokens[-1]) if tokens else ""
+    if last_cleaned in ALLOWED_TAGS:
+        emotion = validate_emotion(last_cleaned)
+        keywords = tokens[:-1]
+    else:
+        emotion = "neutral"
+        keywords = tokens
+
+    brain_input = BrainInput(keywords=keywords, emotion=emotion)
+    return parse_intent_from_input(brain_input)
+
+
 def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOutput:
-    """Generate a deterministic stub response based on keywords and emotion."""
+    """Generate a deterministic stub response based on parsed intent."""
 
     config = cfg or load_config()
     start = time.perf_counter()
+    intent: Intent | None = None
+    normalization_debug: dict[str, object] | None = None
+    token_stats: dict[str, int] | None = None
+    normalized_keywords: list[str] = []
+    emotion: EmotionTag = brain_input.emotion
     try:
-        normalized = normalize_keywords(brain_input.keywords)
-        emotion = brain_input.emotion
+        intent, normalization_debug, token_stats = parse_intent_from_input(brain_input)
+        normalized_keywords = intent.keywords
+        emotion = intent.detected_emotion
 
-        if not normalized:
+        if not normalized_keywords:
             response = DEFAULT_BN
         elif emotion == "question":
-            response = "আপনি " + " ".join(normalized) + " সম্পর্কে জানতে চাচ্ছেন। সংক্ষেপে বলি।"
+            response = "আপনি " + " ".join(normalized_keywords) + " সম্পর্কে জানতে চাচ্ছেন। সংক্ষেপে বলি।"
         elif emotion == "happy":
-            response = "দারুণ! চলুন " + " ".join(normalized) + " নিয়ে শিখি!"
+            response = "দারুণ! চলুন " + " ".join(normalized_keywords) + " নিয়ে শিখি!"
         elif emotion == "sad":
-            response = "চিন্তা করবেন না। " + " ".join(normalized) + " বিষয়টা ধীরে ধীরে শিখে ফেলবেন।"
+            response = "চিন্তা করবেন না। " + " ".join(normalized_keywords) + " বিষয়টা ধীরে ধীরে শিখে ফেলবেন।"
         elif emotion == "negation":
             response = "ঠিক আছে, এটা নয়। আপনি কোনটা বোঝাতে চাচ্ছেন?"
         else:
-            response = "আপনি বললেন: " + " ".join(normalized) + "। আমি সাহায্য করছি।"
+            response = "আপনি বললেন: " + " ".join(normalized_keywords) + "। আমি সাহায্য করছি।"
 
         response = _enforce_word_limit(response, config.max_response_words)
         status = "ready"
@@ -81,15 +235,18 @@ def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOut
         emotion = "neutral"
         status = "error"
         error = str(exc)
-        normalized = []
+        normalized_keywords = []
     end = time.perf_counter()
 
     latency_ms = int((end - start) * 1000)
 
     debug = {
         "raw_keywords": brain_input.keywords,
-        "normalized_keywords": normalized,
+        "normalized_keywords": normalized_keywords,
         "input_emotion": brain_input.emotion,
+        "intent": intent_to_debug(intent) if intent else None,
+        "normalization": normalization_debug,
+        "token_stats": token_stats,
     }
 
     return BrainOutput(
@@ -103,17 +260,16 @@ def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOut
 
 
 def respond_from_list(tokens: list[str], cfg: BrainConfig | None = None) -> BrainOutput:
-    """Helper to respond from a positional token list.
+    """Helper to respond from a positional token list."""
 
-    The final token may be an emotion tag; otherwise neutral is assumed.
-    """
+    intent, normalization_debug, token_stats = parse_intent_from_tokens(tokens)
+    brain_input = BrainInput(keywords=intent.raw_keywords, emotion=intent.detected_emotion)
 
-    if not tokens:
-        brain_input = BrainInput(keywords=[], emotion="neutral")
-    elif tokens[-1] in ALLOWED_TAGS:
-        emotion = validate_emotion(tokens[-1])
-        brain_input = BrainInput(keywords=tokens[:-1], emotion=emotion)
-    else:
-        brain_input = BrainInput(keywords=tokens, emotion="neutral")
-
-    return respond(brain_input, cfg=cfg)
+    output = respond(brain_input, cfg=cfg)
+    # The respond() call will re-parse; ensure debug keeps the original parse result.
+    output.debug.update({
+        "intent": intent_to_debug(intent),
+        "normalization": normalization_debug,
+        "token_stats": token_stats,
+    })
+    return output

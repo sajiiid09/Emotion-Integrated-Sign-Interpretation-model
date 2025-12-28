@@ -13,7 +13,11 @@ BrainStatus = Literal["idle", "listening", "thinking", "ready", "error"]
 
 @dataclass(frozen=True)
 class BrainInput:
-    """Structured input passed to the Brain service."""
+    """Structured input passed to the Brain service.
+
+    ``keywords`` may contain noisy tokens from CV/ASR; they will be cleaned and
+    normalized internally before intent parsing.
+    """
 
     keywords: list[str]
     emotion: EmotionTag
@@ -22,7 +26,11 @@ class BrainInput:
 
 @dataclass(frozen=True)
 class BrainOutput:
-    """Structured response returned by the Brain service."""
+    """Structured response returned by the Brain service.
+
+    ``debug`` can include nested objects such as the parsed intent,
+    normalization details, and token statistics for later analysis.
+    """
 
     response_bn: str
     resolved_emotion: EmotionTag
