@@ -7,9 +7,18 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from .constants import (
+    BRAIN_USE_GEMINI_ENV,
     DEFAULT_DEBUG,
+    DEFAULT_MAX_OUTPUT_TOKENS,
     DEFAULT_MODEL_NAME,
+    DEFAULT_RETRY_COUNT,
+    DEFAULT_DEBOUNCE_MS,
+    DEFAULT_COOLDOWN_MS,
+    DEFAULT_QUEUE_MAXSIZE,
+    DEFAULT_STREAMING,
+    DEFAULT_TEMPERATURE,
     DEFAULT_TIMEOUT_S,
+    GEMINI_API_KEY_ENV_CANDIDATES,
     MAX_RESPONSE_WORDS,
 )
 
@@ -20,6 +29,15 @@ class BrainConfig:
     timeout_s: float
     debug: bool
     max_response_words: int
+    use_gemini: bool
+    api_key: str | None
+    temperature: float
+    max_output_tokens: int
+    retries: int
+    streaming: bool
+    debounce_ms: int
+    cooldown_ms: int
+    queue_maxsize: int
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
@@ -64,10 +82,45 @@ def load_config(env: Mapping[str, str] | None = None) -> BrainConfig:
     max_response_words = _parse_int(
         environment.get("BRAIN_MAX_WORDS"), MAX_RESPONSE_WORDS
     )
+    use_gemini = _parse_bool(environment.get(BRAIN_USE_GEMINI_ENV), False)
+
+    api_key: str | None = None
+    for key_name in GEMINI_API_KEY_ENV_CANDIDATES:
+        candidate = environment.get(key_name)
+        if candidate:
+            api_key = candidate
+            break
+
+    temperature = _parse_float(
+        environment.get("BRAIN_TEMPERATURE"), DEFAULT_TEMPERATURE
+    )
+    max_output_tokens = _parse_int(
+        environment.get("BRAIN_MAX_OUTPUT_TOKENS"), DEFAULT_MAX_OUTPUT_TOKENS
+    )
+    retries = _parse_int(environment.get("BRAIN_RETRIES"), DEFAULT_RETRY_COUNT)
+    streaming = _parse_bool(environment.get("BRAIN_STREAMING"), DEFAULT_STREAMING)
+    debounce_ms = _parse_int(
+        environment.get("BRAIN_DEBOUNCE_MS"), DEFAULT_DEBOUNCE_MS
+    )
+    cooldown_ms = _parse_int(
+        environment.get("BRAIN_COOLDOWN_MS"), DEFAULT_COOLDOWN_MS
+    )
+    queue_maxsize = _parse_int(
+        environment.get("BRAIN_QUEUE_MAXSIZE"), DEFAULT_QUEUE_MAXSIZE
+    )
 
     return BrainConfig(
         model_name=model_name,
         timeout_s=timeout_s,
         debug=debug,
         max_response_words=max_response_words,
+        use_gemini=use_gemini,
+        api_key=api_key,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        retries=retries,
+        streaming=streaming,
+        debounce_ms=debounce_ms,
+        cooldown_ms=cooldown_ms,
+        queue_maxsize=queue_maxsize,
     )

@@ -39,3 +39,16 @@ class BrainOutput:
     error: str | None
     latency_ms: int | None
     debug: dict[str, object]
+
+
+@dataclass(frozen=True)
+class ExecutorSnapshot:
+    """Lightweight snapshot of executor state for realtime HUDs."""
+
+    status: BrainStatus
+    last_output: BrainOutput | None
+    last_update_ts: float
+    request_id: int
+    in_flight: bool
+    last_error: str | None
+    debug: dict[str, object]

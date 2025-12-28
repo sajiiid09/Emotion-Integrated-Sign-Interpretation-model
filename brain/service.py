@@ -1,8 +1,8 @@
-"""Core Brain service logic (Phase 4).
+"""Core Brain service logic (Phase 6).
 
 Provides deterministic placeholder responses with robust normalization,
-intent parsing, contradiction resolution, and prompt construction ready
-for downstream LLM providers (implemented in later phases).
+intent parsing, contradiction resolution, prompt construction, and
+optional Gemini-backed generation.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from .constants import (
     UNKNOWN_TOKEN_PATTERNS,
 )
 from .intent import Intent, ResolvedIntent, intent_to_debug, resolved_intent_to_debug
+from .gemini_client import GeminiClient
 from .prompt_builder import build_prompt
 from .rules import resolve_emotion
 from .types import BrainInput, BrainOutput, BrainStatus, EmotionTag
@@ -230,14 +231,24 @@ def _respond_with_intent(
     status: BrainStatus = "error"
     error: str | None = None
     prompt = None
+    gemini_meta: dict[str, object] = {"enabled": config.use_gemini}
 
     try:
         resolved = resolve_emotion(intent)
         emotion = resolved.resolved_emotion
         prompt = build_prompt(resolved, cfg=config)
-        response = _generate_response_text(resolved.keywords, emotion)
-        response = _enforce_word_limit(response, config.max_response_words)
-        status = "ready"
+        if config.use_gemini:
+            client = GeminiClient(config)
+            response, gemini_meta = client.generate(prompt)
+            if gemini_meta.get("error"):
+                status = "error"
+                error = str(gemini_meta.get("error"))
+            else:
+                status = "ready"
+        else:
+            response = _generate_response_text(resolved.keywords, emotion)
+            response = _enforce_word_limit(response, config.max_response_words)
+            status = "ready"
     except Exception as exc:  # pragma: no cover - Phase 1 has no tests
         response = FALLBACK_BN
         emotion = "neutral"
@@ -270,6 +281,7 @@ def _respond_with_intent(
         "normalization": normalization_debug,
         "token_stats": token_stats,
         "prompt": prompt_debug if prompt_debug else None,
+        "gemini": gemini_meta,
     }
 
     return BrainOutput(
@@ -284,6 +296,12 @@ def _respond_with_intent(
 
 def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOutput:
     """Generate a deterministic stub response based on parsed intent."""
+
+    return build_output(brain_input, cfg=cfg)
+
+
+def build_output(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOutput:
+    """Full pipeline hook used by both synchronous and async paths."""
 
     intent, normalization_debug, token_stats = parse_intent_from_input(brain_input)
     return _respond_with_intent(intent, normalization_debug, token_stats, cfg=cfg)

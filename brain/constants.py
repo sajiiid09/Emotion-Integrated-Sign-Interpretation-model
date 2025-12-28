@@ -52,3 +52,19 @@ DYNAMIC_RULES_BY_TAG: dict[str, str] = {
 OUTPUT_CONSTRAINTS_BN = (
     "শুধু বাংলায় লিখুন, সর্বোচ্চ ৪০ শব্দ, ২-৩ বাক্যে, কোনো বুলেট লিস্ট নয়।"
 )
+
+# Phase 5 Gemini client constants
+GEMINI_API_KEY_ENV_CANDIDATES = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+BRAIN_USE_GEMINI_ENV = "BRAIN_USE_GEMINI"
+DEFAULT_TEMPERATURE = 0.6
+DEFAULT_TOP_P = 0.95
+DEFAULT_MAX_OUTPUT_TOKENS = 120
+DEFAULT_RETRY_COUNT = 2
+DEFAULT_RETRY_BACKOFF_S = 0.6
+DEFAULT_STREAMING = False
+HARD_OUTPUT_RULE_BN = "শুধু বাংলায় লিখুন। ২-৩ বাক্যে, ৪০ শব্দের মধ্যে উত্তর দিন।"
+
+# Phase 6 executor defaults
+DEFAULT_DEBOUNCE_MS = 350
+DEFAULT_COOLDOWN_MS = 1200
+DEFAULT_QUEUE_MAXSIZE = 2

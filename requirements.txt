@@ -9,3 +9,5 @@ tqdm
 scikit-learn
 matplotlib
 seaborn
+
+google-genai
