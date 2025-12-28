@@ -16,7 +16,7 @@ class BrainInput:
     """Structured input passed to the Brain service.
 
     ``keywords`` may contain noisy tokens from CV/ASR; they will be cleaned and
-    normalized internally before intent parsing.
+    normalized internally before intent parsing and contradiction resolution.
     """
 
     keywords: list[str]
@@ -29,7 +29,8 @@ class BrainOutput:
     """Structured response returned by the Brain service.
 
     ``debug`` can include nested objects such as the parsed intent,
-    normalization details, and token statistics for later analysis.
+    normalization details, resolved intent, rule traces, and token
+    statistics for later analysis.
     """
 
     response_bn: str

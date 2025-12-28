@@ -40,3 +40,30 @@ def intent_to_debug(intent: Intent) -> dict[str, object]:
         "notes": intent.notes,
     }
 
+
+@dataclass(frozen=True)
+class ResolvedIntent:
+    """Intent after contradiction resolution via the rule engine."""
+
+    keywords: list[str]
+    detected_emotion: EmotionTag
+    resolved_emotion: EmotionTag
+    meta: dict[str, str] | None
+    flags: dict[str, bool]
+    notes: list[str]
+    rule_trace: list[dict[str, object]]
+
+
+def resolved_intent_to_debug(resolved_intent: ResolvedIntent) -> dict[str, object]:
+    """Return a compact debug representation of a :class:`ResolvedIntent`."""
+
+    return {
+        "keywords": resolved_intent.keywords,
+        "detected_emotion": resolved_intent.detected_emotion,
+        "resolved_emotion": resolved_intent.resolved_emotion,
+        "meta_keys": list(resolved_intent.meta.keys()) if resolved_intent.meta else [],
+        "flags": resolved_intent.flags,
+        "notes": resolved_intent.notes,
+        "rule_trace": resolved_intent.rule_trace,
+    }
+

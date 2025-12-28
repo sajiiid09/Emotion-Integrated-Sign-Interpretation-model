@@ -1,7 +1,8 @@
-"""Core Brain service logic (Phase 2).
+"""Core Brain service logic (Phase 3).
 
-Provides deterministic placeholder responses with robust normalization and
-intent parsing to withstand noisy upstream inputs.
+Provides deterministic placeholder responses with robust normalization,
+intent parsing, and contradiction resolution via a rule engine to withstand
+noisy upstream inputs.
 """
 
 from __future__ import annotations
@@ -20,8 +21,9 @@ from .constants import (
     PUNCT_STRIP_CHARS,
     UNKNOWN_TOKEN_PATTERNS,
 )
-from .intent import Intent, intent_to_debug
-from .types import BrainInput, BrainOutput, EmotionTag
+from .intent import Intent, ResolvedIntent, intent_to_debug, resolved_intent_to_debug
+from .rules import resolve_emotion
+from .types import BrainInput, BrainOutput, BrainStatus, EmotionTag
 
 
 @dataclass(frozen=True)
@@ -199,52 +201,56 @@ def parse_intent_from_tokens(tokens: list[str]) -> tuple[Intent, dict[str, objec
     return parse_intent_from_input(brain_input)
 
 
-def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOutput:
-    """Generate a deterministic stub response based on parsed intent."""
+def _generate_response_text(keywords: list[str], emotion: EmotionTag) -> str:
+    if not keywords:
+        return DEFAULT_BN
+    if emotion == "question":
+        return "আপনি " + " ".join(keywords) + " সম্পর্কে জানতে চাচ্ছেন। সংক্ষেপে বলি।"
+    if emotion == "happy":
+        return "দারুণ! চলুন " + " ".join(keywords) + " নিয়ে শিখি!"
+    if emotion == "sad":
+        return "চিন্তা করবেন না। " + " ".join(keywords) + " বিষয়টা ধীরে ধীরে শিখে ফেলবেন।"
+    if emotion == "negation":
+        return "ঠিক আছে, এটা নয়। আপনি কোনটা বোঝাতে চাচ্ছেন?"
+    return "আপনি বললেন: " + " ".join(keywords) + "। আমি সাহায্য করছি।"
 
+
+def _respond_with_intent(
+    intent: Intent,
+    normalization_debug: dict[str, object] | None,
+    token_stats: dict[str, int] | None,
+    cfg: BrainConfig | None = None,
+) -> BrainOutput:
     config = cfg or load_config()
     start = time.perf_counter()
-    intent: Intent | None = None
-    normalization_debug: dict[str, object] | None = None
-    token_stats: dict[str, int] | None = None
-    normalized_keywords: list[str] = []
-    emotion: EmotionTag = brain_input.emotion
+    resolved: ResolvedIntent | None = None
+    response = FALLBACK_BN
+    emotion: EmotionTag = intent.detected_emotion
+    status: BrainStatus = "error"
+    error: str | None = None
+
     try:
-        intent, normalization_debug, token_stats = parse_intent_from_input(brain_input)
-        normalized_keywords = intent.keywords
-        emotion = intent.detected_emotion
-
-        if not normalized_keywords:
-            response = DEFAULT_BN
-        elif emotion == "question":
-            response = "আপনি " + " ".join(normalized_keywords) + " সম্পর্কে জানতে চাচ্ছেন। সংক্ষেপে বলি।"
-        elif emotion == "happy":
-            response = "দারুণ! চলুন " + " ".join(normalized_keywords) + " নিয়ে শিখি!"
-        elif emotion == "sad":
-            response = "চিন্তা করবেন না। " + " ".join(normalized_keywords) + " বিষয়টা ধীরে ধীরে শিখে ফেলবেন।"
-        elif emotion == "negation":
-            response = "ঠিক আছে, এটা নয়। আপনি কোনটা বোঝাতে চাচ্ছেন?"
-        else:
-            response = "আপনি বললেন: " + " ".join(normalized_keywords) + "। আমি সাহায্য করছি।"
-
+        resolved = resolve_emotion(intent)
+        emotion = resolved.resolved_emotion
+        response = _generate_response_text(resolved.keywords, emotion)
         response = _enforce_word_limit(response, config.max_response_words)
         status = "ready"
-        error: str | None = None
     except Exception as exc:  # pragma: no cover - Phase 1 has no tests
         response = FALLBACK_BN
         emotion = "neutral"
         status = "error"
         error = str(exc)
-        normalized_keywords = []
     end = time.perf_counter()
 
     latency_ms = int((end - start) * 1000)
 
     debug = {
-        "raw_keywords": brain_input.keywords,
-        "normalized_keywords": normalized_keywords,
-        "input_emotion": brain_input.emotion,
-        "intent": intent_to_debug(intent) if intent else None,
+        "raw_keywords": intent.raw_keywords,
+        "normalized_keywords": intent.keywords,
+        "input_emotion": intent.detected_emotion,
+        "intent": intent_to_debug(intent),
+        "resolved_intent": resolved_intent_to_debug(resolved) if resolved else None,
+        "rule_trace": resolved.rule_trace if resolved else None,
         "normalization": normalization_debug,
         "token_stats": token_stats,
     }
@@ -259,17 +265,15 @@ def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOut
     )
 
 
+def respond(brain_input: BrainInput, cfg: BrainConfig | None = None) -> BrainOutput:
+    """Generate a deterministic stub response based on parsed intent."""
+
+    intent, normalization_debug, token_stats = parse_intent_from_input(brain_input)
+    return _respond_with_intent(intent, normalization_debug, token_stats, cfg=cfg)
+
+
 def respond_from_list(tokens: list[str], cfg: BrainConfig | None = None) -> BrainOutput:
     """Helper to respond from a positional token list."""
 
     intent, normalization_debug, token_stats = parse_intent_from_tokens(tokens)
-    brain_input = BrainInput(keywords=intent.raw_keywords, emotion=intent.detected_emotion)
-
-    output = respond(brain_input, cfg=cfg)
-    # The respond() call will re-parse; ensure debug keeps the original parse result.
-    output.debug.update({
-        "intent": intent_to_debug(intent),
-        "normalization": normalization_debug,
-        "token_stats": token_stats,
-    })
-    return output
+    return _respond_with_intent(intent, normalization_debug, token_stats, cfg=cfg)

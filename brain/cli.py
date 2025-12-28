@@ -11,7 +11,14 @@ from .types import BrainInput
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Brain module manual runner")
+    parser = argparse.ArgumentParser(
+        description="Brain module manual runner",
+        epilog=(
+            "Examples:\n"
+            "  python -m brain.cli --tokens \"দুঃখ negation\" --show-debug\n"
+            "  python -m brain.cli --tokens \"খুশি question\" --show-debug\n"
+        ),
+    )
     parser.add_argument(
         "--keywords",
         type=str,
