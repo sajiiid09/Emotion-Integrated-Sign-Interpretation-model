@@ -1,68 +1,49 @@
 {
   "version": 1,
   "entries": {
-    "আমি": {
-      "english": "I",
-      "category": "pronoun",
-      "category_raw": "Pronoun",
-      "emotions": [
-        "neutral"
-      ]
-    },
-    "তুমি": {
-      "english": "You",
-      "category": "pronoun",
-      "category_raw": "Pronoun",
-      "emotions": [
-        "neutral"
-      ]
-    },
-    "আমরা": {
-      "english": "We",
-      "category": "pronoun",
-      "category_raw": "Pronoun",
-      "emotions": [
-        "neutral"
-      ]
-    },
     "কি": {
       "english": "What",
       "category": "wh",
-      "category_raw": "WH",
+      "category_raw": "Question",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Question"
       ]
     },
     "কোথায়": {
       "english": "Where",
       "category": "wh",
-      "category_raw": "WH",
+      "category_raw": "Question",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Question"
       ]
     },
     "কেন": {
       "english": "Why",
       "category": "wh",
-      "category_raw": "WH",
+      "category_raw": "Question",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Question"
       ]
     },
     "কবে": {
       "english": "When",
       "category": "wh",
-      "category_raw": "WH",
+      "category_raw": "Question",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Question"
       ]
     },
     "কেমন": {
       "english": "How",
       "category": "wh",
-      "category_raw": "WH",
+      "category_raw": "Question",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Question"
       ]
     },
     "ব্যাখ্যা": {
@@ -70,7 +51,8 @@
       "category": "instruction",
       "category_raw": "Instruction",
       "emotions": [
-        "guidance"
+        "Neutral",
+        "Question"
       ]
     },
     "উদাহরণ": {
@@ -78,7 +60,8 @@
       "category": "instruction",
       "category_raw": "Instruction",
       "emotions": [
-        "guidance"
+        "Neutral",
+        "Question"
       ]
     },
     "অর্থ": {
@@ -86,7 +69,8 @@
       "category": "instruction",
       "category_raw": "Instruction",
       "emotions": [
-        "guidance"
+        "Neutral",
+        "Question"
       ]
     },
     "সঠিক": {
@@ -94,7 +78,8 @@
       "category": "instruction",
       "category_raw": "Instruction",
       "emotions": [
-        "guidance"
+        "Neutral",
+        "Question"
       ]
     },
     "ভুল": {
@@ -102,15 +87,8 @@
       "category": "instruction",
       "category_raw": "Instruction",
       "emotions": [
-        "guidance"
-      ]
-    },
-    "সকাল": {
-      "english": "Morning",
-      "category": "time",
-      "category_raw": "Time",
-      "emotions": [
-        "neutral"
+        "Neutral",
+        "Question"
       ]
     },
     "কালকে": {
@@ -118,15 +96,160 @@
       "category": "time",
       "category_raw": "Time",
       "emotions": [
-        "planning"
+        "Neutral",
+        "Question"
       ]
     },
-    "সময়": {
-      "english": "Time",
+    "ভালো": {
+      "english": "Good",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "খারাপ": {
+      "english": "Bad",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "খুশি": {
+      "english": "Happy",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "দুঃখ": {
+      "english": "Sad",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "রাগ": {
+      "english": "Angry",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "অবাক": {
+      "english": "Surprised",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "গরম": {
+      "english": "Hot",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "ঠান্ডা": {
+      "english": "Cold",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "সুন্দর": {
+      "english": "Beautiful",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "অসুস্থ": {
+      "english": "Sick",
+      "category": "emotion_adj",
+      "category_raw": "Emotion/Adj",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "সকাল": {
+      "english": "Morning",
       "category": "time",
       "category_raw": "Time",
       "emotions": [
-        "planning"
+        "Neutral",
+        "Question"
+      ]
+    },
+    "পছন্দ": {
+      "english": "Like",
+      "category": "verb",
+      "category_raw": "Verb/Emotion",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "বন্ধু": {
+      "english": "Friend",
+      "category": "noun",
+      "category_raw": "Noun/Relation",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
+      ]
+    },
+    "ধন্যবাদ": {
+      "english": "Thanks",
+      "category": "interaction",
+      "category_raw": "Interaction",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad",
+        "Negation"
       ]
     },
     "খাওয়া": {
@@ -134,15 +257,17 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "neutral"
+        "Neutral",
+        "Negation"
       ]
     },
     "পড়া": {
-      "english": "Read",
+      "english": "Read/Study",
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "focus"
+        "Neutral",
+        "Negation"
       ]
     },
     "লেখা": {
@@ -150,7 +275,8 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "focus"
+        "Neutral",
+        "Negation"
       ]
     },
     "শোনা": {
@@ -158,23 +284,26 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "focus"
+        "Neutral",
+        "Negation"
       ]
     },
     "বলা": {
-      "english": "Speak",
+      "english": "Say",
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "expression"
+        "Neutral",
+        "Negation"
       ]
     },
     "দেখা": {
-      "english": "See",
+      "english": "See/Look",
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "awareness"
+        "Neutral",
+        "Negation"
       ]
     },
     "চিন্তা": {
@@ -182,7 +311,8 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "reflection"
+        "Neutral",
+        "Negation"
       ]
     },
     "কাজ": {
@@ -190,7 +320,8 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "effort"
+        "Neutral",
+        "Negation"
       ]
     },
     "থামা": {
@@ -198,7 +329,8 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "caution"
+        "Neutral",
+        "Negation"
       ]
     },
     "সাহায্য": {
@@ -206,223 +338,48 @@
       "category": "verb",
       "category_raw": "Verb",
       "emotions": [
-        "support"
+        "Neutral",
+        "Negation"
       ]
     },
-    "হ্যালো": {
-      "english": "Hello",
-      "category": "interaction",
-      "category_raw": "Interaction",
+    "বিশ্ববিদ্যালয়": {
+      "english": "University",
+      "category": "place",
+      "category_raw": "Place",
       "emotions": [
-        "positive"
-      ]
-    },
-    "বিদায়": {
-      "english": "Goodbye",
-      "category": "interaction",
-      "category_raw": "Interaction",
-      "emotions": [
-        "sadness"
-      ]
-    },
-    "ধন্যবাদ": {
-      "english": "Thank you",
-      "category": "interaction",
-      "category_raw": "Interaction",
-      "emotions": [
-        "gratitude"
-      ]
-    },
-    "হ্যাঁ": {
-      "english": "Yes",
-      "category": "interaction",
-      "category_raw": "Interaction",
-      "emotions": [
-        "affirmation"
-      ]
-    },
-    "ভালো": {
-      "english": "Good",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "happy"
-      ]
-    },
-    "খারাপ": {
-      "english": "Bad",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "sad"
-      ]
-    },
-    "খুশি": {
-      "english": "Happy",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "joy"
-      ]
-    },
-    "দুঃখ": {
-      "english": "Sad",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "sad"
-      ]
-    },
-    "রাগ": {
-      "english": "Angry",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "angry"
-      ]
-    },
-    "অবাক": {
-      "english": "Surprised",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "surprise"
-      ]
-    },
-    "গরম": {
-      "english": "Hot",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "discomfort"
-      ]
-    },
-    "ঠান্ডা": {
-      "english": "Cold",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "discomfort"
-      ]
-    },
-    "সুন্দর": {
-      "english": "Beautiful",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "delight"
-      ]
-    },
-    "অসুস্থ": {
-      "english": "Sick",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "concern"
-      ]
-    },
-    "পছন্দ": {
-      "english": "Like",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "positive"
-      ]
-    },
-    "বন্ধু": {
-      "english": "Friend",
-      "category": "emotion_adj",
-      "category_raw": "Emotion",
-      "emotions": [
-        "warmth"
-      ]
-    },
-    "গণিত": {
-      "english": "Math",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "neutral"
-      ]
-    },
-    "বিজ্ঞান": {
-      "english": "Science",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "curiosity"
-      ]
-    },
-    "ইতিহাস": {
-      "english": "History",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "curiosity"
-      ]
-    },
-    "ভূগোল": {
-      "english": "Geography",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "curiosity"
-      ]
-    },
-    "ভাষা": {
-      "english": "Language",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "curiosity"
-      ]
-    },
-    "মহাবিশ্ব": {
-      "english": "Universe",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "wonder"
-      ]
-    },
-    "পৃথিবী": {
-      "english": "Earth",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "wonder"
-      ]
-    },
-    "পরিবেশ": {
-      "english": "Environment",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "concern"
-      ]
-    },
-    "শরীর": {
-      "english": "Body",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "health"
-      ]
-    },
-    "বাংলাদেশ": {
-      "english": "Bangladesh",
-      "category": "subject",
-      "category_raw": "Subject",
-      "emotions": [
-        "pride"
+        "Neutral",
+        "Happy",
+        "Sad (Safety Net)"
       ]
     },
     "কম্পিউটার": {
       "english": "Computer",
-      "category": "subject",
-      "category_raw": "Subject",
+      "category": "object",
+      "category_raw": "Object",
       "emotions": [
-        "curiosity"
+        "Neutral",
+        "Happy",
+        "Sad (Safety Net)"
+      ]
+    },
+    "মোবাইল": {
+      "english": "Mobile",
+      "category": "object",
+      "category_raw": "Object",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad (Safety Net)"
+      ]
+    },
+    "সময়": {
+      "english": "Time",
+      "category": "concept",
+      "category_raw": "Concept",
+      "emotions": [
+        "Neutral",
+        "Happy",
+        "Sad (Safety Net)"
       ]
     },
     "বই": {
@@ -430,15 +387,121 @@
       "category": "object",
       "category_raw": "Object",
       "emotions": [
-        "neutral"
+        "Neutral",
+        "Happy",
+        "Sad (Safety Net)"
       ]
     },
-    "স্কুল": {
-      "english": "School",
-      "category": "place",
-      "category_raw": "Place",
+    "আমি": {
+      "english": "I/Me",
+      "category": "pronoun",
+      "category_raw": "Pronoun",
       "emotions": [
-        "neutral"
+        "Neutral"
+      ]
+    },
+    "তুমি": {
+      "english": "You",
+      "category": "pronoun",
+      "category_raw": "Pronoun",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "আমরা": {
+      "english": "We",
+      "category": "pronoun",
+      "category_raw": "Pronoun",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "গণিত": {
+      "english": "Math",
+      "category": "subject",
+      "category_raw": "Subject",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "বিজ্ঞান": {
+      "english": "Science",
+      "category": "subject",
+      "category_raw": "Subject",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "ইতিহাস": {
+      "english": "History",
+      "category": "subject",
+      "category_raw": "Subject",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "ভূগোল": {
+      "english": "Geography",
+      "category": "subject",
+      "category_raw": "Subject",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "ভাষা": {
+      "english": "Language",
+      "category": "subject",
+      "category_raw": "Subject",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "মহাবিশ্ব": {
+      "english": "Universe",
+      "category": "concept",
+      "category_raw": "Concept",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "পৃথিবী": {
+      "english": "Earth",
+      "category": "concept",
+      "category_raw": "Concept",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "পরিবেশ": {
+      "english": "Environment",
+      "category": "concept",
+      "category_raw": "Concept",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "শরীর": {
+      "english": "Body",
+      "category": "concept",
+      "category_raw": "Concept",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "প্রশ্ন": {
+      "english": "Question (Noun)",
+      "category": "noun",
+      "category_raw": "Noun",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "উত্তর": {
+      "english": "Answer",
+      "category": "noun",
+      "category_raw": "Noun",
+      "emotions": [
+        "Neutral"
       ]
     },
     "শিক্ষক": {
@@ -446,39 +509,47 @@
       "category": "person",
       "category_raw": "Person",
       "emotions": [
-        "respect"
+        "Neutral"
       ]
     },
-    "ছাত্র": {
-      "english": "Student",
-      "category": "person",
-      "category_raw": "Person",
+    "বাংলাদেশ": {
+      "english": "Bangladesh",
+      "category": "place",
+      "category_raw": "Place",
       "emotions": [
-        "encouragement"
+        "Neutral"
       ]
     },
-    "খাবার": {
-      "english": "Food",
-      "category": "object",
-      "category_raw": "Object",
-      "emotions": [
-        "hunger"
-      ]
-    },
-    "পানি": {
-      "english": "Water",
-      "category": "object",
-      "category_raw": "Object",
-      "emotions": [
-        "need"
-      ]
-    },
-    "সঙ্গীত": {
-      "english": "Music",
+    "নাম": {
+      "english": "Name",
       "category": "concept",
       "category_raw": "Concept",
       "emotions": [
-        "joy"
+        "Neutral"
+      ]
+    },
+    "হ্যালো": {
+      "english": "Hello",
+      "category": "interaction",
+      "category_raw": "Interaction",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "বিদায়": {
+      "english": "Bye",
+      "category": "interaction",
+      "category_raw": "Interaction",
+      "emotions": [
+        "Neutral"
+      ]
+    },
+    "হ্যাঁ": {
+      "english": "Yes",
+      "category": "interaction",
+      "category_raw": "Interaction",
+      "emotions": [
+        "Neutral"
       ]
     }
   },
