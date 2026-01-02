@@ -21,8 +21,10 @@ from .constants import (
     OUTPUT_CONSTRAINTS_BN,
     TUTOR_TOPIC_KEYWORDS_BN,
 )
+from .lang.lexicon import INSTRUCTION_WORDS, TUTOR_TOPICS
 from .intent import ResolvedIntent
 from .types import EmotionTag
+from .lang.shaper import ShapedSentence
 
 
 @dataclass(frozen=True)
@@ -51,15 +53,20 @@ def summarize_rule_trace(trace: list[dict[str, object]], max_items: int = 3) -> 
     return names
 
 
-def infer_mode(resolved: ResolvedIntent) -> str:
-    """Infer tutor or realtime mode based on keywords and emotion."""
+def infer_mode(resolved: ResolvedIntent, shaped: ShapedSentence | None = None) -> str:
+    """Infer tutor or realtime mode based on keywords, lexicon, and emotion."""
 
-    # Check if any keyword is a tutor topic
-    for keyword in resolved.keywords:
-        if keyword in TUTOR_TOPIC_KEYWORDS_BN:
-            return MODE_TUTOR
+    tokens = set(resolved.keywords)
+    if shaped:
+        tokens.update(shaped.canonical_tokens)
 
-    # Tutor mode also if it's a question about a topic
+    has_tutor_topic = bool(tokens & (TUTOR_TOPICS | set(TUTOR_TOPIC_KEYWORDS_BN)))
+    has_instruction = bool(tokens & INSTRUCTION_WORDS)
+
+    if has_tutor_topic and (resolved.resolved_emotion == "question" or has_instruction):
+        return MODE_TUTOR
+
+    # Fallback to previous heuristic
     if resolved.resolved_emotion == "question":
         for keyword in resolved.keywords:
             if keyword in TUTOR_TOPIC_KEYWORDS_BN:
@@ -68,14 +75,17 @@ def infer_mode(resolved: ResolvedIntent) -> str:
     return MODE_REALTIME
 
 
-def build_user_payload(resolved: ResolvedIntent, mode: str) -> str:
+def build_user_payload(resolved: ResolvedIntent, mode: str, shaped: ShapedSentence | None = None) -> str:
     """Build a concise user payload block in Bangla, mode-aware."""
 
-    keywords_joined = " ".join(resolved.keywords)
+    canonical_tokens = shaped.canonical_tokens if shaped else resolved.keywords
+    keywords_joined = " ".join(canonical_tokens)
     keywords_line = keywords_joined if keywords_joined else "কিছু নেই"
     gloss = resolved.gloss_bn or keywords_joined or " "
+    proto = shaped.proto_bn if shaped else gloss
 
     lines = [
+        f"প্রাথমিক_বাক্য: {proto}",
         f"কীওয়ার্ড_ক্রম: {keywords_line}",
         f"ট্যাগ: {resolved.resolved_emotion}",
         f"সম্ভাব্য_অর্থ: {gloss}",
@@ -85,7 +95,9 @@ def build_user_payload(resolved: ResolvedIntent, mode: str) -> str:
     return "\n".join(lines)
 
 
-def build_prompt(resolved: ResolvedIntent, *, cfg: BrainConfig | None = None) -> BuiltPrompt:
+def build_prompt(
+    resolved: ResolvedIntent, *, shaped: ShapedSentence | None = None, cfg: BrainConfig | None = None
+) -> BuiltPrompt:
     """Construct the full prompt for the LLM provider with mode support.
     
     Order of system instruction blocks:
@@ -97,7 +109,7 @@ def build_prompt(resolved: ResolvedIntent, *, cfg: BrainConfig | None = None) ->
     """
 
     config = cfg or load_config()
-    mode = infer_mode(resolved)
+    mode = infer_mode(resolved, shaped)
     
     # Build system instruction in deterministic order
     system = f"{BASE_SYSTEM_INSTRUCTION_BN}\n{OUTPUT_CONSTRAINTS_BN}\n{HARD_OUTPUT_RULE_BN}"
@@ -113,7 +125,7 @@ def build_prompt(resolved: ResolvedIntent, *, cfg: BrainConfig | None = None) ->
         system = f"{system}\n{tag_rule}"
     
     system_final = system
-    user = build_user_payload(resolved, mode)
+    user = build_user_payload(resolved, mode, shaped)
     as_text = f"{system_final}\n\n{user}"
 
     # Use mode-aware word limit in debug metadata
@@ -131,6 +143,8 @@ def build_prompt(resolved: ResolvedIntent, *, cfg: BrainConfig | None = None) ->
         },
         "mode": mode,
         "max_response_words": max_words,
+        "proto_bn": shaped.proto_bn if shaped else None,
+        "shaped_intent_type": shaped.intent_type if shaped else None,
     }
 
     return BuiltPrompt(

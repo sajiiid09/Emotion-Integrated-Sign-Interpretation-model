@@ -16,6 +16,7 @@ from .lexicon import (
     get_category,
     is_category,
 )
+from .pipeline import run_language_pipeline
 
 __all__ = [
     "LexiconEntry",
@@ -36,4 +37,5 @@ __all__ = [
     "get_entry",
     "get_category",
     "is_category",
+    "run_language_pipeline",
 ]

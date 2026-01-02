@@ -13,6 +13,7 @@ from .config import BrainConfig, load_config
 from .constants import ALLOWED_TAGS, DEFAULT_COOLDOWN_MS, DEFAULT_DEBOUNCE_MS, MODE_TUTOR
 from .logging_utils import append_event, build_log_event
 from .prompt_builder import build_prompt
+from .lang.pipeline import run_language_pipeline
 from .rules import resolve_emotion
 from .service import clean_token, is_affirmative_bn, is_negative_bn, respond
 from .types import BrainInput, BrainOutput, BrainStatus, ExecutorSnapshot
@@ -273,8 +274,9 @@ class BrainExecutor:
             # Phase 2: Smart trigger policy
             intent = BrainInput(keywords=item.brain_input.keywords, emotion=item.brain_input.emotion)
             resolved = resolve_emotion(intent)
-            built_prompt = build_prompt(resolved, cfg=self._cfg)
-            
+            shaped = run_language_pipeline(resolved.keywords, resolved.resolved_emotion)
+            built_prompt = build_prompt(resolved, shaped=shaped, cfg=self._cfg)
+
             will_trigger = should_trigger_gemini(
                 resolved.resolved_emotion,
                 built_prompt.mode,
@@ -282,15 +284,18 @@ class BrainExecutor:
                 self._last_submit_ts,
                 self._cfg,
             )
+
+            if shaped.intent_type in {"clarify", "interaction"}:
+                will_trigger = False
             
             # Check cache hit before potentially triggering Gemini
             cache_key = None
             if self._cfg.use_gemini and self._cfg.cache_enabled:
-                cache_key = make_cache_key(resolved.gloss_bn, built_prompt.mode, resolved.resolved_emotion)
+                cache_key = make_cache_key(shaped.proto_bn, built_prompt.mode, resolved.resolved_emotion)
             
             # If gloss unchanged and recent, skip call (Phase 2 optimization)
             if (
-                self._last_published_gloss == resolved.gloss_bn
+                self._last_published_gloss == shaped.proto_bn
                 and self._last_publish_ts is not None
                 and (time.perf_counter() - self._last_publish_ts) < (self._cfg.cooldown_ms / 1000.0)
             ):
@@ -340,10 +345,11 @@ class BrainExecutor:
 
             if output.status == "ready":
                 self._last_publish_ts = publish_time
-                if output.debug and isinstance(output.debug.get("resolved_intent"), dict):
-                    resolved_intent = output.debug.get("resolved_intent", {})
-                    self._last_published_gloss = resolved_intent.get("gloss_bn", "")
-            
+                if output.debug:
+                    shaped_debug = output.debug.get("shaped", {}) if isinstance(output.debug, dict) else {}
+                    if isinstance(shaped_debug, dict):
+                        self._last_published_gloss = shaped_debug.get("proto_bn", "")
+
             self._last_error = output.error
             status: BrainStatus = output.status
             cache_hit = bool(output.debug.get("cache_hit")) if output.debug else False

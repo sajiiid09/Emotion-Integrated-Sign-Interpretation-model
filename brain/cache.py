@@ -17,12 +17,12 @@ class CachedItem:
     timestamp: float
 
 
-def make_cache_key(gloss_bn: str, mode: str, resolved_emotion: str) -> str:
-    """Create a stable cache key from gloss, mode, and emotion.
-    
+def make_cache_key(proto_bn: str, mode: str, resolved_emotion: str) -> str:
+    """Create a stable cache key from proto sentence, mode, and emotion.
+
     Uses SHA1 hash for deterministic, collision-resistant keys.
     """
-    combined = f"{gloss_bn}|{mode}|{resolved_emotion}"
+    combined = f"{proto_bn}|{mode}|{resolved_emotion}"
     return hashlib.sha1(combined.encode("utf-8")).hexdigest()
 
 
