@@ -10,7 +10,12 @@ from .dataset_loader import LexiconEntry, normalize_token_bn
 
 
 def _normalize_token_set(values: Set[str]) -> Set[str]:
-    return {normalize_token_bn(token) for token in values if normalize_token_bn(token)}
+    normalized: Set[str] = set()
+    for token in values:
+        cleaned = normalize_token_bn(token)
+        if cleaned:
+            normalized.add(cleaned)
+    return normalized
 
 
 PRONOUNS: Set[str] = _normalize_token_set({"আমি", "তুমি", "আমরা"})
