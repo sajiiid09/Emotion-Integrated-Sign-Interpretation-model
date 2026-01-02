@@ -10,6 +10,7 @@ from typing import Sequence
 from .config import load_config
 from .executor import BrainExecutor
 from .gemini_client import GeminiClient
+from .lang.pipeline import run_language_pipeline
 from .prompt_builder import build_prompt
 from .rules import resolve_emotion
 from .service import (
@@ -135,9 +136,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         brain_input = BrainInput(keywords=keywords, emotion=args.emotion)  # type: ignore[arg-type]
         intent, _, _ = parse_intent_from_input(brain_input)
 
+    shaped = None
     if intent is not None:
         resolved = resolve_emotion(intent)
-        prompt = build_prompt(resolved, cfg=cfg)
+        shaped = run_language_pipeline(resolved.keywords, resolved.resolved_emotion)
+        prompt = build_prompt(resolved, shaped=shaped, cfg=cfg)
 
     if args.prompt_only:
         if prompt is None or resolved is None:

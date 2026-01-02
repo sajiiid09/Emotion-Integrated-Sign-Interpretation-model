@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import cast
 
-from .cache import ResponseCache
+from .cache import ResponseCache, make_cache_key
 from .config import BrainConfig, load_config
 from .constants import (
     ALLOWED_TAGS,
@@ -24,6 +24,7 @@ from .constants import (
     UNKNOWN_TOKEN_PATTERNS,
 )
 from .intent import Intent, ResolvedIntent, intent_to_debug, resolved_intent_to_debug
+from .lang.pipeline import run_language_pipeline
 from .gemini_client import GeminiClient
 from .postprocess import postprocess_response_bn
 from .prompt_builder import build_prompt
@@ -136,6 +137,17 @@ def _normalize_keywords_detailed(keywords: list[str]) -> _NormalizationResult:
     )
 
 
+def _shaped_to_debug(shaped_sentence) -> dict[str, object]:
+    return {
+        "canonical_tokens": shaped_sentence.canonical_tokens,
+        "proto_bn": shaped_sentence.proto_bn,
+        "intent_type": shaped_sentence.intent_type,
+        "confidence": shaped_sentence.confidence,
+        "flags": shaped_sentence.flags,
+        "needs_gemini": shaped_sentence.needs_gemini,
+    }
+
+
 def normalize_keywords(keywords: list[str]) -> list[str]:
     """Backward-compatible normalization wrapper returning only cleaned tokens."""
 
@@ -229,7 +241,9 @@ def parse_intent_from_tokens(tokens: list[str]) -> tuple[Intent, dict[str, objec
     return parse_intent_from_input(brain_input)
 
 
-def _generate_response_text(keywords: list[str], emotion: EmotionTag) -> str:
+def _generate_response_text(keywords: list[str], emotion: EmotionTag, proto_bn: str | None) -> str:
+    if proto_bn:
+        return proto_bn
     if not keywords:
         return DEFAULT_BN
     if emotion == "question":
@@ -252,6 +266,7 @@ def _respond_with_intent(
     config = cfg or load_config()
     start = time.perf_counter()
     resolved: ResolvedIntent | None = None
+    shaped = None
     response = FALLBACK_BN
     emotion: EmotionTag = intent.detected_emotion
     status: BrainStatus = "error"
@@ -264,34 +279,42 @@ def _respond_with_intent(
     try:
         resolved = resolve_emotion(intent)
         emotion = resolved.resolved_emotion
-        prompt = build_prompt(resolved, cfg=config)
-        if config.use_gemini:
-            cache_key = None
-            global _CACHE, _CACHE_CFG
-            if config.cache_enabled:
-                desired_cfg = (config.cache_ttl_s, float(config.max_response_words), config.cache_enabled)
-                if _CACHE is None or _CACHE_CFG != desired_cfg:
-                    _CACHE = ResponseCache(ttl_s=config.cache_ttl_s)
-                    _CACHE_CFG = desired_cfg
-                cache_key = hashlib.sha1(prompt.as_text.encode("utf-8")).hexdigest()
-                cached = _CACHE.get(cache_key) if _CACHE else None
-                if cached:
-                    response = cached
-                    status = "ready"
-                    cache_hit = True
-            if not cache_hit:
-                client = GeminiClient(config)
-                response, gemini_meta = client.generate(prompt)
-                if gemini_meta.get("error"):
-                    status = "error"
-                    error = str(gemini_meta.get("error"))
-                else:
-                    status = "ready"
-                if cache_key and _CACHE and not gemini_meta.get("error"):
-                    _CACHE.set(cache_key, response)
-        else:
-            response = _generate_response_text(resolved.keywords, emotion)
+        shaped = run_language_pipeline(resolved.keywords, resolved.resolved_emotion)
+
+        if shaped.intent_type in {"clarify", "interaction"}:
+            response = shaped.proto_bn or FALLBACK_BN
             status = "ready"
+            gemini_meta = {"enabled": config.use_gemini, "skipped_reason": shaped.intent_type}
+        else:
+            prompt = build_prompt(resolved, shaped=shaped, cfg=config)
+            if config.use_gemini:
+                cache_key = None
+                global _CACHE, _CACHE_CFG
+                if config.cache_enabled:
+                    desired_cfg = (config.cache_ttl_s, float(config.max_response_words), config.cache_enabled)
+                    if _CACHE is None or _CACHE_CFG != desired_cfg:
+                        _CACHE = ResponseCache(ttl_s=config.cache_ttl_s)
+                        _CACHE_CFG = desired_cfg
+                    cache_key = make_cache_key(shaped.proto_bn, prompt.mode, resolved.resolved_emotion)
+                    cached = _CACHE.get(cache_key) if _CACHE else None
+                    if cached:
+                        response, topics = cached
+                        status = "ready"
+                        cache_hit = True
+                        gemini_meta["next_topics"] = topics
+                if not cache_hit:
+                    client = GeminiClient(config)
+                    response, gemini_meta = client.generate(prompt)
+                    if gemini_meta.get("error"):
+                        status = "error"
+                        error = str(gemini_meta.get("error"))
+                    else:
+                        status = "ready"
+                    if cache_key and _CACHE and not gemini_meta.get("error"):
+                        _CACHE.set(cache_key, response, gemini_meta.get("next_topics"))
+            else:
+                response = _generate_response_text(resolved.keywords, emotion, shaped.proto_bn)
+                status = "ready"
     except Exception as exc:  # pragma: no cover - Phase 1 has no tests
         response = FALLBACK_BN
         emotion = "neutral"
@@ -332,6 +355,7 @@ def _respond_with_intent(
         "prompt": prompt_debug if prompt_debug else None,
         "gemini": gemini_meta,
         "cache_hit": cache_hit,
+        "shaped": _shaped_to_debug(shaped) if shaped else None,
     }
 
     # Use mode-aware postprocessing
