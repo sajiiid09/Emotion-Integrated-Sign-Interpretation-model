@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 if __package__:
     from .dataset_loader import normalize_token_bn
+    from .disambiguator import DisambiguationResult, disambiguate
     from .lexicon import (
         EMOTION_ADJ,
         INTERACTION,
@@ -51,6 +52,17 @@ else:
     VERBS = lexicon.VERBS
     WH_WORDS = lexicon.WH_WORDS
     get_category = lexicon.get_category
+
+    disambiguator_module_name = "brain.lang.disambiguator"
+    disambiguator_spec = importlib.util.spec_from_file_location(
+        disambiguator_module_name, module_dir / "disambiguator.py"
+    )
+    disambiguator = importlib.util.module_from_spec(disambiguator_spec)
+    assert disambiguator_spec and disambiguator_spec.loader
+    sys.modules[disambiguator_module_name] = disambiguator
+    disambiguator_spec.loader.exec_module(disambiguator)  # type: ignore[misc]
+    DisambiguationResult = disambiguator.DisambiguationResult
+    disambiguate = disambiguator.disambiguate
 
     segmenter_module_name = "brain.lang.segmenter"
     segmenter_spec = importlib.util.spec_from_file_location(
@@ -228,6 +240,20 @@ def shape_phrase(phrase: Phrase) -> ShapedSentence:
 
     proto = _apply_punctuation(proto, intent_type == "question")
 
+    disambiguation: DisambiguationResult = disambiguate(tokens)
+    if disambiguation.needs_context:
+        flags["needs_context"] = True
+        adjusted_confidence = max(0.3, confidence + disambiguation.confidence_adjustment)
+        clarified_proto = disambiguation.clarification_bn or proto
+        return ShapedSentence(
+            proto_parts or tokens,
+            clarified_proto,
+            "clarify",
+            adjusted_confidence,
+            flags,
+            False,
+        )
+
     return ShapedSentence(proto_parts, proto, intent_type, confidence, flags, needs_gemini)
 
 
@@ -243,6 +269,8 @@ if __name__ == "__main__":
         Phrase(["আমি", "খুশি"], "negation", 0, 0, "pause"),
         Phrase(["গণিত"], "question", 0, 0, "pause"),
         Phrase(["আমি", "বিজ্ঞান", "শিখছি"], "neutral", 0, 0, "pause"),
+        Phrase(["পড়া"], "neutral", 0, 0, "pause"),
+        Phrase(["ব্যাখ্যা"], "neutral", 0, 0, "pause"),
     ]
 
     for phrase in sample_phrases:
