@@ -1,0 +1,61 @@
+Bangla,English,Category,Emotions to Record
+কি,What,Question,"Neutral, Question"
+কোথায়,Where,Question,"Neutral, Question"
+কেন,Why,Question,"Neutral, Question"
+কবে,When,Question,"Neutral, Question"
+কেমন,How,Question,"Neutral, Question"
+ব্যাখ্যা,Explain,Instruction,"Neutral, Question"
+উদাহরণ,Example,Instruction,"Neutral, Question"
+অর্থ,Meaning,Instruction,"Neutral, Question"
+সঠিক,Correct,Instruction,"Neutral, Question"
+ভুল,Wrong,Instruction,"Neutral, Question"
+কালকে ,Tomorrow,Time,"Neutral, Question"
+ভালো,Good,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+খারাপ,Bad,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+খুশি,Happy,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+দুঃখ,Sad,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+রাগ,Angry,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+অবাক,Surprised,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+গরম,Hot,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+ঠান্ডা,Cold,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+সুন্দর,Beautiful,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+অসুস্থ,Sick,Emotion/Adj,"Neutral, Happy, Sad, Negation"
+সকাল ,Morning,Time,"Neutral, Question"
+পছন্দ,Like,Verb/Emotion,"Neutral, Happy, Sad, Negation"
+বন্ধু,Friend,Noun/Relation,"Neutral, Happy, Sad, Negation"
+ধন্যবাদ,Thanks,Interaction,"Neutral, Happy, Sad, Negation"
+খাওয়া ,Eat,Verb,"Neutral, Negation"
+পড়া,Read/Study,Verb,"Neutral, Negation"
+লেখা,Write,Verb,"Neutral, Negation"
+শোনা,Listen,Verb,"Neutral, Negation"
+বলা,Say,Verb,"Neutral, Negation"
+দেখা,See/Look,Verb,"Neutral, Negation"
+চিন্তা,Think,Verb,"Neutral, Negation"
+কাজ,Work,Verb,"Neutral, Negation"
+থামা,Stop,Verb,"Neutral, Negation"
+সাহায্য,Help,Verb,"Neutral, Negation"
+বিশ্ববিদ্যালয় ,University,Place,"Neutral, Happy, Sad (Safety Net)"
+কম্পিউটার,Computer,Object,"Neutral, Happy, Sad (Safety Net)"
+মোবাইল,Mobile,Object,"Neutral, Happy, Sad (Safety Net)"
+সময়,Time,Concept,"Neutral, Happy, Sad (Safety Net)"
+বই,Book,Object,"Neutral, Happy, Sad (Safety Net)"
+আমি,I/Me,Pronoun,Neutral
+তুমি,You,Pronoun,Neutral
+আমরা,We,Pronoun,Neutral
+গণিত,Math,Subject,Neutral
+বিজ্ঞান,Science,Subject,Neutral
+ইতিহাস,History,Subject,Neutral
+ভূগোল,Geography,Subject,Neutral
+ভাষা,Language,Subject,Neutral
+মহাবিশ্ব,Universe,Concept,Neutral
+পৃথিবী,Earth,Concept,Neutral
+পরিবেশ ,Environment,Concept,Neutral
+শরীর,Body,Concept,Neutral
+প্রশ্ন,Question (Noun),Noun,Neutral
+উত্তর,Answer,Noun,Neutral
+শিক্ষক,Teacher,Person,Neutral
+বাংলাদেশ,Bangladesh,Place,Neutral
+নাম,Name,Concept,Neutral
+হ্যালো,Hello,Interaction,Neutral
+বিদায়,Bye,Interaction,Neutral
+হ্যাঁ,Yes,Interaction,Neutral
