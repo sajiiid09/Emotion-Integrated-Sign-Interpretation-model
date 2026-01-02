@@ -37,9 +37,12 @@ def normalize_token_bn(token: str | None) -> str:
 
     if token is None:
         return ""
-    normalized = unicodedata.normalize("NFC", str(token))
+
+    normalized = str(token)
     normalized = normalized.strip()
     normalized = _SPACE_PATTERN.sub(" ", normalized)
+    normalized = unicodedata.normalize("NFC", normalized)
+    normalized = normalized.strip()
     return normalized if normalized else ""
 
 
@@ -53,10 +56,15 @@ _CATEGORY_MAP: Dict[str, str] = {
     "temporal": "time",
     "emotion": "emotion_adj",
     "emotion_adj": "emotion_adj",
+    "emotion/adj": "emotion_adj",
     "adj_emotion": "emotion_adj",
     "verb": "verb",
+    "verb_emotion": "verb",
+    "verb/emotion": "verb",
     "action": "verb",
     "noun": "noun",
+    "noun_relation": "noun",
+    "noun/relation": "noun",
     "subject": "subject",
     "topic": "subject",
     "concept": "concept",
@@ -78,6 +86,7 @@ def map_category(category_raw: str | None) -> str:
     if category_raw is None:
         return "concept"
     normalized = category_raw.strip().lower()
+    normalized = normalized.replace("/", "_").replace("-", "_").replace(" ", "_")
     if not normalized:
         return "concept"
     return _CATEGORY_MAP.get(normalized, normalized)
